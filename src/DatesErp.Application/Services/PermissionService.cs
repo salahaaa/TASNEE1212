@@ -1,4 +1,5 @@
 using DatesErp.Core.Domain.Entities;
+using DatesErp.Core.Domain.Enums;
 using DatesErp.Core.Interfaces.Services;
 using DatesErp.Core.Exceptions;
 using DatesErp.Infrastructure.Persistence;
@@ -20,31 +21,11 @@ public class PermissionService
     { _db = db; _session = session; }
 
     // ═══ الكتالوج الفعلي: الموارد = أكواد الوحدات المستخدمة في Require عبر النظام ═══
+    // §الإصلاح الأمني: صار مشتقاً من PermissionModules.All (المصدر الواحد في Core) بدل
+    // نسخة يدوية ثالثة. كان «products/cartons/employees» مُعرَّفة هنا أو مُطبَّقة في الخادم
+    // بينما تسقط من البذور وبوابة الشاشات — فتُفتح الشاشة بلا فحص. الآن مستحيل بنيوياً.
     public static readonly (string Code, string NameAr, string GroupAr)[] ResourceCatalog =
-    {
-        ("dashboard", "لوحة المؤشرات", "التشغيل"),
-        ("receiving", "الاستلام وسندات الاستلام", "المخازن"),
-        ("inventory", "أرصدة المخزون والحركات", "المخازن"),
-        ("cartons", "الكرتون الفارغ (تولّد/عدّ/بيع)", "المخازن"),
-        ("lots", "الدفعات وأرصدة الخام", "المخازن"),
-        ("materials", "المواد المساعدة", "المخازن"),
-        ("products", "الأصناف والعبوات والطاقة", "البيانات الأساسية"),
-        ("customers", "العملاء", "البيانات الأساسية"),
-        ("suppliers", "الموردون", "البيانات الأساسية"),
-        ("planning", "خطط الإنتاج (MPS)", "الإنتاج"),
-        ("production", "أوامر الإنتاج", "الإنتاج"),
-        ("manualorder", "الأوامر اليدوية الاستثنائية (بلا خطة)", "الإنتاج"), // §B88/L1: تُمنح صراحةً — والمدير العام تُستكمل له تلقائياً
-        ("execution", "التنفيذ والإقفال اليومي", "الإنتاج"),
-        ("quality", "الفحص والجودة", "الجودة"),
-        ("finishedgoods", "استلام الإنتاج التام", "الجودة"),
-        ("delivery", "التسليم والفوترة", "التسليم"),
-        ("reports", "مركز التقارير", "التقارير"),
-        ("users", "إدارة المستخدمين", "الإدارة"),
-        ("permissions", "الأدوار والصلاحيات", "الإدارة"),
-        ("settings", "الإعدادات والهوية", "الإدارة"),
-        ("backup", "النسخ الاحتياطي والصيانة", "الإدارة"),
-        ("admin", "إدارة النظام العامة", "الإدارة")
-    };
+        PermissionModules.All;
 
     public static readonly (string Code, string NameAr, bool Sensitive)[] OperationCatalog =
     {
@@ -119,6 +100,43 @@ public class PermissionService
         GrantReopenToApprovers();
         // §B95: منح «تعديل بعد الاعتماد» لمعتمدي الجودة — التصحيح المعتمد على المحاضر المعتمدة.
         GrantQualityCorrectionToApprovers();
+        // §الإصلاح الأمني: ترحيل القواعد القائمة إلى الوحدات التي دخلت البوابة حديثاً.
+        BackfillNewlyGatedModules();
+    }
+
+    /// <summary>
+    /// §الإصلاح الأمني — ترحيل آمن للقواعد القائمة.
+    ///
+    /// «products» و«cartons» و«employees» كانت خارج بذور الأدوار وخارج بوابة فتح الشاشات،
+    /// فتُفتح شاشاتها بلا فحص. بعد إدخالها البوابة، القاعدة القائمة (المُرقّاة لا الجديدة)
+    /// لا تحوي لها أي صف صلاحية لأي دور ⟵ سيُحجب عن كل المستخدمين ما كانوا يعملون عليه.
+    ///
+    /// هذا الترحيل يمنح «عرض» فقط لكل دور نشط على هذه الوحدات إن لم يكن له صف مسجّل أصلاً —
+    /// فلا ينكسر عمل قائم، ولا تُمنح صلاحية تعديل أو حذف لأحد. ما زاد عن العرض يُمنح يدوياً
+    /// من شاشة الصلاحيات. idempotent: لا يكتب شيئاً بعد أول تشغيل، ولا يلمس أي صف موجود.
+    /// </summary>
+    public void BackfillNewlyGatedModules()
+    {
+        string[] newlyGated = { PermissionModules.Products, PermissionModules.Cartons, PermissionModules.Employees };
+        var viewOp = _db.PermissionOperations.FirstOrDefault(o => o.Code == "View");
+        if (viewOp == null) return;
+
+        var resources = _db.PermissionResources.Where(r => newlyGated.Contains(r.Code)).ToList();
+        if (resources.Count == 0) return;
+
+        var roleIds = _db.Roles.Where(r => r.IsActive).Select(r => r.Id).ToList();
+        bool added = false;
+        foreach (var roleId in roleIds)
+            foreach (var res in resources)
+            {
+                // أي صف مسجّل لهذا الدور على هذا المورد = الإدارة ضبطته سابقاً ⟵ لا نلمسه
+                bool hasAny = _db.RoleResourcePermissions.Any(x => x.RoleId == roleId && x.ResourceId == res.Id);
+                if (hasAny) continue;
+                _db.RoleResourcePermissions.Add(new RoleResourcePermission
+                { RoleId = roleId, ResourceId = res.Id, OperationId = viewOp.Id, IsAllowed = true });
+                added = true;
+            }
+        if (added) _db.SaveChanges();
     }
 
     /// <summary>

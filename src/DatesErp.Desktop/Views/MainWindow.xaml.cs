@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using DatesErp.Core.Domain.Enums;
 using DatesErp.Desktop.Screens;
 using DatesErp.Desktop.Views.Screens;
 using DatesErp.Desktop.Services;
@@ -202,15 +203,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// §B94 — الوحدات الخاضعة لبوابة العرض: المزروعة في مصفوفة الصلاحيات فقط
-    /// (كل دور مزروع يملك View عليها — فلا إقفال كاذب؛ وما عداها يُفتح بلا منع صامت).
+    /// §B94 — الوحدات الخاضعة لبوابة العرض.
+    /// §الإصلاح الأمني: كانت قائمة يدوية تسقط منها products/cartons/employees، فكان أي مستخدم
+    /// — ولو «مشاهدة» — يفتح «طاقات الأصناف» و«الكرتون» و«الموظفون وأرقام الدخول» بلا فحص،
+    /// رغم أن الخادم يفرضها. الآن مشتقة من المصدر الواحد PermissionModules فلا تسقط وحدة أبداً.
     /// </summary>
-    private static readonly HashSet<string> GatedModules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "customers", "suppliers", "receiving", "lots", "planning", "production", "materials",
-        "execution", "quality", "finishedgoods", "delivery", "inventory", "reports",
-        "users", "settings", "backup"
-    };
+    private static readonly HashSet<string> GatedModules =
+        new(PermissionModules.ScreenGated, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// §B94 — بوابة الصلاحيات المركزية: لا دخول لأي شاشة (قائمة أو قفزة أو بطاقة لوحة)

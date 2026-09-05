@@ -165,9 +165,9 @@ public static class DbSeeder
         var viewOnly = (int)PermissionFlags.View;
         var viewPrintExport = Mask(PermissionFlags.View, PermissionFlags.Print, PermissionFlags.Export);
 
-        string[] modules = { "customers", "suppliers", "receiving", "lots", "planning", "production", "materials",
-                             "execution", "quality", "finishedgoods", "delivery", "inventory", "reports",
-                             "users", "settings", "backup" };
+        // §الإصلاح الأمني: كانت القائمة مكتوبة يدوياً هنا وتسقط منها products/cartons/employees،
+        // فلا يُزرع لها أي صف صلاحية ⟵ تُفتح شاشاتها بلا فحص. الآن من المصدر الواحد في Core.
+        string[] modules = PermissionModules.Codes;
         foreach (var role in roles)
         {
             foreach (var m in modules)
@@ -176,11 +176,15 @@ public static class DbSeeder
                 {
                     SystemRoles.Administrator => full,
                     SystemRoles.Management => full,
-                    SystemRoles.Warehouse => (m is "receiving" or "lots" or "inventory" or "materials")
+                    // §الإصلاح الأمني: الوحدات المستجدة (cartons/products/employees) وُزّعت على الأدوار
+                    // بمنطق عملها الفعلي في الخادم — لا تُترك viewOnly لمن يشغّلها فيُقفل عليه عمله.
+                    SystemRoles.Warehouse => (m is "receiving" or "lots" or "inventory" or "materials" or "cartons")
                         ? full : (m is "finishedgoods" or "delivery") ? Mask(PermissionFlags.View, PermissionFlags.Create, PermissionFlags.Edit, PermissionFlags.Approve, PermissionFlags.Post, PermissionFlags.Print) : viewOnly,
                     SystemRoles.Production => (m is "planning" or "production" or "execution" or "materials")
-                        ? full : viewOnly,
-                    SystemRoles.Quality => m == "quality" ? full : viewOnly,
+                        ? full : (m is "products") ? Mask(PermissionFlags.View, PermissionFlags.Edit, PermissionFlags.Print) : viewOnly,
+                    // الجودة تعرّف معايير الفحص وأنواع النتائج على الأصناف (InspectionService ⟵ products/Edit)
+                    SystemRoles.Quality => m == "quality" ? full
+                        : (m is "products") ? Mask(PermissionFlags.View, PermissionFlags.Edit, PermissionFlags.Print) : viewOnly,
                     SystemRoles.Sales => (m is "customers" or "delivery") ? full : viewPrintExport,
                     SystemRoles.Finance => (m is "reports" or "customers") ? viewPrintExport : viewOnly,
                     _ => viewOnly
