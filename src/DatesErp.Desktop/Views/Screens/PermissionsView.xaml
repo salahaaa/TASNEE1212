@@ -1,0 +1,63 @@
+<UserControl x:Class="DatesErp.Desktop.Views.Screens.PermissionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═ اليمين: الأدوار + المستخدمون ═ -->
+        <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,10,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="🎭 الأدوار (انقر للتحرير)" FontWeight="Bold" Foreground="#0A246A" Margin="0,0,0,4"/>
+                    <ListBox x:Name="RolesList" Height="150" SelectionChanged="Role_Selected" BorderThickness="1"/>
+                    <TextBlock Text="👥 المستخدمون (استثناءات فوق أدوارهم)" FontWeight="Bold" Foreground="#0A246A" Margin="0,10,0,4"/>
+                    <TextBox x:Name="UserSearchBox" TextChanged="UserSearch_Changed" Margin="0,0,0,4" ToolTip="بحث بالاسم/الكود/الدور"/>
+                    <ListBox x:Name="UsersList" Height="170" SelectionChanged="User_Selected" BorderThickness="1"/>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button x:Name="SaveBtn" Content="💾 حفظ التغييرات" Style="{StaticResource ErpApproveButton}" Click="Save_Click"/>
+                        <Button Content="نسخ الصلاحيات" Style="{StaticResource ErpButton}" Click="Copy_Click" Margin="6,0,0,0"/>
+                        <Button Content="مقارنة" Style="{StaticResource ErpButton}" Click="Compare_Click" Margin="6,0,0,0"/>
+                        <Button Content="📜 السجل" Style="{StaticResource ErpButton}" Click="Audit_Click" Margin="6,0,0,0"/>
+                        <Button Content="تعطيل المحدد" Style="{StaticResource ErpDangerButton}" Click="Deactivate_Click" Margin="6,0,0,0"/>
+                        <Button Content="🎭 دور جديد" Style="{StaticResource ErpPrimaryButton}" Click="NewRole_Click" Margin="6,0,0,0"/>
+                        <Button Content="🤝 تفويض زمني" Style="{StaticResource ErpButton}" Click="Delegation_Click" Margin="6,0,0,0"/>
+                    </WrapPanel>
+                </StackPanel>
+                <TextBlock x:Name="TargetLabel" Text="اختر دوراً أو مستخدماً" FontWeight="Bold" FontSize="12" Foreground="#7C3AED" Margin="0,10,0,0" TextWrapping="Wrap"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ═ الوسط: شجرة الموارد + جدول العمليات ═ -->
+        <Border Grid.Column="1" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="260"/>
+                </Grid.RowDefinitions>
+                <DockPanel Grid.Row="0">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="🌳 الموارد (الشاشات الفعلية)" FontWeight="Bold" Foreground="#0A246A" FontSize="12.5"/>
+                        <Button Content="تحديد الكل" Style="{StaticResource ErpButton}" Click="SelectAll_Click" Margin="14,0,0,0" Padding="8,2"/>
+                        <Button Content="إلغاء الكل" Style="{StaticResource ErpButton}" Click="ClearAll_Click" Margin="6,0,0,0" Padding="8,2"/>
+                        <TextBox x:Name="TreeSearchBox" Width="220" TextChanged="TreeSearch_Changed" Margin="14,0,0,0" ToolTip="بحث في الموارد والعمليات — يصفي الشجرة"/>
+                    </StackPanel>
+                    <TreeView x:Name="ResTree" BorderThickness="1"/>
+                </DockPanel>
+                <DockPanel Grid.Row="1" Margin="0,8,0,0">
+                    <TextBlock x:Name="OpsTitle" DockPanel.Dock="Top" Text="اختر مورداً من الشجرة لعرض عملياته" FontWeight="Bold" Foreground="#0A246A" Margin="0,0,0,4"/>
+                    <DataGrid x:Name="OpsGrid" AutoGenerateColumns="False" RowHeight="30" BorderThickness="1">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="العملية" Binding="{Binding NameAr}" Width="*" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="تنبيه" Binding="{Binding SensitiveMark}" Width="60" IsReadOnly="True"/>
+                            <DataGridCheckBoxColumn Header="السماح" Binding="{Binding Allowed, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,274 @@
+<UserControl x:Class="DatesErp.Desktop.Views.Screens.PlanningView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+    <!-- §B66: بناء من الصفر — صفحة واحدة قابلة للتمرير كنموذج الويب المرجعي.
+         لا DockPanels متداخلة ولا أقسام ثابتة تأكل الارتفاع: كل قسم صفّ في Grid،
+         والتمرير يوصل لكل شيء على أي حجم نافذة. جدول البنود بارتفاع مضمون 260. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ١) المسار + الحالة -->
+            <Border Grid.Row="0" Background="#F4F2E8" BorderBrush="#9A9782" BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,6">
+                <DockPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                        <TextBlock Text="مسار المعاملة:" FontWeight="Bold" Foreground="#1F2937" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Border x:Name="Step1" Width="24" Height="24" CornerRadius="12" Background="#16283C" BorderBrush="#C9A227" BorderThickness="1.5">
+                            <TextBlock Text="1" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="إعداد الخطة" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="5,0,8,0"/>
+                        <TextBlock Text="⟵" Foreground="#9A9782" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Border x:Name="Step2" Width="24" Height="24" CornerRadius="12" Background="#6B7280">
+                            <TextBlock Text="2" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="اعتماد المدير العام" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="5,0,8,0"/>
+                        <TextBlock Text="⟵" Foreground="#9A9782" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Border x:Name="Step3" Width="24" Height="24" CornerRadius="12" Background="#6B7280">
+                            <TextBlock Text="3" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="أوامر التشغيل" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="5,0,8,0"/>
+                        <TextBlock Text="⟵" Foreground="#9A9782" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Border x:Name="Step4" Width="24" Height="24" CornerRadius="12" Background="#6B7280">
+                            <TextBlock Text="4" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="الإقفال" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="5,0,0,0"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                        <Button x:Name="SubmitBtn" Content="📤 إرسال للاعتماد" Style="{StaticResource ErpButton}" Click="Submit_Click"/>
+                        <Button x:Name="ReturnBtn" Content="↩ إعادة للتعديل" Style="{StaticResource ErpButton}" Click="ReturnForRevision_Click" Visibility="Collapsed" Margin="6,0,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+            <Border x:Name="StatusBanner" Grid.Row="1" Background="#EFEDE0" BorderBrush="#C9C4AE" BorderThickness="1" Padding="8,4" Margin="0,6,0,6">
+                <StackPanel>
+                    <TextBlock x:Name="StatusText" Text="مسودة قيد الإعداد 📝" FontSize="12" FontWeight="Bold" Foreground="#14532D"/>
+                    <!-- §B75: بصمة الإنشاء والاعتماد في رأس الشاشة -->
+                    <TextBlock x:Name="PlanMetaBox" Text="خطة جديدة — لم تُحفظ بعد · أنشأها: — · اعتمدها: —" FontSize="12" Foreground="#6B7280" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ٢) محددات الخطة -->
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,6">
+                <StackPanel>
+                    <WrapPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="كود الخطة:" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="CodeBox" Width="160" IsReadOnly="True" Background="#EBE9ED" FontWeight="Bold" Foreground="#1F2937"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="من تاريخ *:" Style="{StaticResource FieldLabel}"/>
+                            <DatePicker x:Name="StartBox" Width="135" SelectedDateChanged="PlanDates_Changed"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="إلى تاريخ *:" Style="{StaticResource FieldLabel}"/>
+                            <DatePicker x:Name="EndBox" Width="135" SelectedDateChanged="PlanDates_Changed"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="نوع الخطة:" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox x:Name="TypeBox" Width="110" SelectedIndex="0" SelectionChanged="TypeBox_Changed">
+                                <ComboBoxItem Content="يومية"/>
+                                <ComboBoxItem Content="أسبوعية"/>
+                                <ComboBoxItem Content="شهرية"/>
+                                <ComboBoxItem Content="فترة"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="الوردية *:" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox x:Name="ShiftBox" Width="190" SelectionChanged="CapacityInputs_Changed"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="خط الإنتاج:" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox x:Name="LineBox" Width="150" SelectionChanged="CapacityInputs_Changed"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Text="عنوان الخطة *:" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="TitleBox" Width="260" FontWeight="Bold" Foreground="#14532D"/>
+                        </StackPanel>
+                    </WrapPanel>
+                    <WrapPanel Margin="0,6,0,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,14,0">
+                            <TextBlock Text="نطاق التخطيط:" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <RadioButton x:Name="MultiRadio" Content="👥 عدة عملاء (مجمع)" IsChecked="True" FontWeight="Bold" GroupName="scope" Margin="0,0,10,0" Checked="Scope_Changed"/>
+                            <RadioButton x:Name="SingleRadio" Content="👤 عميل محدد" FontWeight="Bold" GroupName="scope" Checked="Scope_Changed"/>
+                        </StackPanel>
+                        <Border x:Name="SingleCustPanel" Background="#FEF9C3" BorderBrush="#FACC15" BorderThickness="1" Padding="6,3" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="العميل:" FontWeight="Bold" Foreground="#854D0E" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <ComboBox x:Name="SingleCustBox" Width="220" DisplayMemberPath="CustomerName" SelectedValuePath="Id" SelectionChanged="SingleCust_Changed"/>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Margin="14,0,0,0">
+                            <TextBlock Text="مدد سريعة:" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Button Content="7 أيام" Style="{StaticResource ErpButton}" Click="Duration_Click" Tag="7"/>
+                            <Button Content="10 أيام" Style="{StaticResource ErpButton}" Click="Duration_Click" Tag="10"/>
+                            <Button Content="14 يوماً" Style="{StaticResource ErpButton}" Click="Duration_Click" Tag="14"/>
+                            <Button Content="20 يوماً" Style="{StaticResource ErpButton}" Click="Duration_Click" Tag="20"/>
+                            <Button Content="30 يوماً" Style="{StaticResource ErpButton}" Click="Duration_Click" Tag="30"/>
+                        </StackPanel>
+                        <StackPanel Margin="14,0,0,0">
+                            <TextBlock Text="البيان والتوجيه:" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="NotesBox" Width="320"/>
+                        </StackPanel>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ٣) أزرار الإدراج والاعتماد -->
+            <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,6">
+                <WrapPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <RadioButton x:Name="ApproveRadio" Content="اعتماد" IsChecked="True" FontWeight="Bold" GroupName="planact" VerticalAlignment="Center"/>
+                        <RadioButton x:Name="HoldRadio" Content="تعليق" FontWeight="Bold" GroupName="planact" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <Button x:Name="ApproveActionBtn" Content="✅ اعتماد الخطة (F10)" Style="{StaticResource ErpApproveButton}" Click="ApproveAction_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="SaveActionBtn" Content="💾 حفظ الخطة" Style="{StaticResource ErpPrimaryButton}" Click="Save_Click" Margin="0,0,6,0"/>
+                    <Button x:Name="CustLotsBtn" Content="👤 أصناف العميل (F4)" Style="{StaticResource ErpButton}" Foreground="#14532D" Click="PickLot_Click" Margin="0,0,6,0"/>
+                    <Button Content="👥 أصناف العملاء (F6)" Style="{StaticResource ErpButton}" Foreground="#1F2937" Click="MultiCustomers_Click" Margin="0,0,6,0"/>
+                    <Button Content="📥 من استلام مباشر" Style="{StaticResource ErpButton}" Foreground="#B45309" Click="DirectReceipt_Click" Margin="0,0,6,0"/>
+                    <Button Content="⚖ اقتراح توزيع عادل" Style="{StaticResource ErpButton}" Foreground="#7C3AED" Click="Fair_Click" Margin="0,0,6,0"/>
+                    <Button Content="🔍 فحص الخطة" Style="{StaticResource ErpButton}" Foreground="#0A246A" Click="CheckPlan_Click" Margin="0,0,6,0"
+                            ToolTip="فحص الخطة متعددة العملاء: توزيع البنود (عملاء/أصناف) على أيام الفترة (من–إلى) بنفس عمل التوزيع — والحكم: قابلة للتنفيذ أم فيها عجز"/>
+                    <Button Content="✍️ إضافة يدوي" Style="{StaticResource ErpButton}" Click="Manual_Click" Margin="0,0,6,0"/>
+                </WrapPanel>
+            </Border>
+
+            <!-- ٤) شريط الطاقة والعدادات -->
+            <Border Grid.Row="4" Background="#F4F2E8" BorderBrush="#B8B5A0" BorderThickness="1" Padding="8,4" Margin="0,0,0,6">
+                <DockPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <TextBlock Text="⏱️ حالة طاقة الوردية:" FontWeight="Bold" Foreground="#14532D" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="CapacitySummary" Text="إجمالي المجدول: 0 كرتون (0.0 ساعة) من أصل 0 كرتون (0.0 ساعات)." Foreground="#1F2937" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                        <TextBlock x:Name="TotItemsBox" Text="البنود: 0" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="TotCartonsBox" Text="كراتين: 0" FontWeight="Bold" Foreground="#14532D" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="TotQtyBox" Text="الوزن: 0 كجم" FontWeight="Bold" Foreground="#14532D" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="TotCustsBox" Text="عملاء: 0" FontWeight="Bold" Foreground="#7C3AED" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="RemainingBadge" Text="الساعات المتبقية: 0.0 س" FontWeight="Bold" Foreground="#16A34A" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- ٥) جدول البنود (ارتفاع مضمون) -->
+            <Border Grid.Row="5" Style="{StaticResource Card}" Margin="0,0,0,6">
+                <StackPanel>
+                    <TextBlock Text="📦 بنود الخطة — العميل والدفعة والصنف والكميات" FontSize="12" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,6"/>
+                    <DataGrid x:Name="RowsGrid" MinHeight="260" RowHeight="32" FontSize="13.5" ColumnHeaderHeight="36">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="م" Binding="{Binding No}" Width="34" IsReadOnly="True"/>
+                            <DataGridTextColumn x:Name="CustomerColumn" Header="العميل المالك 👤" Binding="{Binding CustomerName}" Width="*" MinWidth="110" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="الدفعة والشحنة 📦" Binding="{Binding LotCode}" Width="0.9*" MinWidth="100" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="الصنف التام 🏷️" Binding="{Binding ProductName}" Width="1.2*" MinWidth="120" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="الوحدة 📏" Binding="{Binding UnitDisplay}" Width="110" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="الكراتين *" Binding="{Binding CartonsText, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+                            <DataGridTextColumn Header="الوزن (كجم) ⚖️" Binding="{Binding QtyKg, StringFormat=N1}" Width="0.9*" MinWidth="90" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="تاريخ الإنتاج 📅" Width="125">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DatePicker SelectedDate="{Binding DateValue, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="2,0,2,0"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="الوردية" Binding="{Binding ShiftName}" Width="95" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="خط الإنتاج" Binding="{Binding LineName}" Width="95" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="حذف" Width="44">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="✕" Padding="4,0" Style="{StaticResource ErpDangerButton}" Click="RemoveRow_Click" Tag="{Binding No}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock x:Name="GridHintPlan" FontSize="11.5" Foreground="#6B7280" TextWrapping="Wrap" Margin="0,6,0,0"
+                        Text="لا توجد بنود مجدولة — اضغط «👤 أصناف العميل (F4)» أو «👥 أصناف العملاء (F6)» لاختيار شحنات ودفعات التمور الخام، أو «⚖ اقتراح توزيع عادل»، أو «✍️ إضافة يدوي»."/>
+                </StackPanel>
+            </Border>
+
+            <!-- ٦) حالة الأيام وتقدم العملاء -->
+            <Border Grid.Row="6" Style="{StaticResource WhiteCard}" Margin="0,0,0,6">
+                <StackPanel>
+                    <WrapPanel Margin="0,0,0,4">
+                        <TextBlock Text="📅 اليوم:" FontWeight="Bold" FontSize="11.5" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <DatePicker x:Name="DailyDateBox" Width="140"/>
+                        <Button Content="عرض خطة اليوم" Style="{StaticResource ErpPrimaryButton}" Click="ShowDailyPlan_Click" Margin="6,0,0,0"/>
+                        <Button Content="اليوم الحالي" Style="{StaticResource ErpButton}" Click="Today_Click" Margin="6,0,0,0"/>
+                        <Button x:Name="EditRowBtn" Content="✏️ تعديل البند المحدد" Style="{StaticResource ErpButton}" Click="EditRow_Click" Visibility="Collapsed" Margin="6,0,0,0"/>
+                    </WrapPanel>
+                    <WrapPanel>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="بنود اليوم:" FontSize="11" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,2"/>
+                            <DataGrid x:Name="DailyGrid" Height="112" Width="640" RowHeight="26" SelectionChanged="DailyGrid_SelectionChanged" MouseDoubleClick="DailyGrid_DoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="العميل 👤" Binding="{Binding CustomerName}" Width="*" MinWidth="100" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="الصنف 🏷️" Binding="{Binding ProductName}" Width="1.2*" MinWidth="110" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="الوردية" Binding="{Binding ShiftName}" Width="80" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="كراتين" Binding="{Binding PlannedCartons}" Width="60" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="الطاقة القصوى (كرتون)" Binding="{Binding MaxCapacity}" Width="120" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="المعدل/ساعة (محسوب)" Binding="{Binding RatePerHour}" Width="110" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="ساعات مطلوبة" Binding="{Binding RequiredHours}" Width="80" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="ساعات متبقية" Binding="{Binding HoursRemainingOnDay}" Width="80" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="الحالة" Binding="{Binding ExecStatusAr}" Width="*" MinWidth="80" IsReadOnly="True"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="حالة أيام الخطة:" FontSize="11" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,2"/>
+                            <DataGrid x:Name="DaysGrid" Height="112" Width="330" RowHeight="26">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="اليوم" Binding="{Binding Date}" Width="100" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="البنود" Binding="{Binding RowsCount}" Width="50" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="المخطط (كجم)" Binding="{Binding PlannedKg}" Width="90" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="الحالة" Binding="{Binding StatusAr}" Width="*" IsReadOnly="True"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="تقدم كل عميل:" FontSize="11" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,2"/>
+                            <DataGrid x:Name="CustomersProgGrid" Height="112" Width="430" RowHeight="26">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="العميل" Binding="{Binding CustomerName}" Width="*" MinWidth="110" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="مخطط" Binding="{Binding Planned}" Width="65" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="منتج" Binding="{Binding Produced}" Width="65" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="مسلَّم" Binding="{Binding Delivered}" Width="65" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="الحالة" Binding="{Binding StatusAr}" Width="*" MinWidth="70" IsReadOnly="True"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ٧) سجل الخطط -->
+            <Border Grid.Row="7" Style="{StaticResource WhiteCard}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="📋 الخطط المحفوظة (نقر مزدوج للفتح):" FontWeight="Bold" FontSize="11.5" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox x:Name="PlansSearchBox" Width="280" TextChanged="PlansSearch_Changed" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <DataGrid x:Name="PlansGrid" Height="104" RowHeight="28" MouseDoubleClick="PlansGrid_DoubleClick">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="رقم الخطة" Binding="{Binding DocNo}" Width="120"/>
+                            <DataGridTextColumn Header="العنوان" Binding="{Binding Title}" Width="*"/>
+                            <DataGridTextColumn Header="الفترة" Binding="{Binding Period}" Width="150"/>
+                            <DataGridTextColumn Header="العملاء" Binding="{Binding Customers}" Width="60"/>
+                            <DataGridTextColumn Header="البنود" Binding="{Binding Items}" Width="50"/>
+                            <DataGridTextColumn Header="الكمية (كجم)" Binding="{Binding Qty}" Width="0.8*" MinWidth="90"/>
+                            <DataGridTextColumn Header="الحالة" Binding="{Binding StatusAr}" Width="*" MinWidth="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

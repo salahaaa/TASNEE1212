@@ -1,0 +1,69 @@
+<UserControl x:Class="DatesErp.Desktop.Views.ErpChrome"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FlowDirection="RightToLeft">
+    <!-- ═══ إطار النافذة الكلاسيكي الموحّد (مطابق لشاشات النظام المعتمدة) ═══ -->
+    <Border BorderBrush="#7F9DB9" BorderThickness="1">
+        <DockPanel Background="#ECE9D8">
+
+            <!-- 1) شريط العنوان الأزرق -->
+            <Border DockPanel.Dock="Top" Padding="10,4">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#0A246A" Offset="0"/>
+                        <GradientStop Color="#3A6EA5" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Foreground="White" FontWeight="Bold" FontSize="13"
+                               Text="{Binding TitleText, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                        <!-- §B54: كانا زرين ميتين — وُصلا بالتصغير/التكبير الفعلي للنافذة -->
+                        <Button Content="_" Width="18" Height="15" FontSize="9" Style="{StaticResource ErpButton}" Padding="0" Margin="1,0" Click="Min_Click"/>
+                        <Button Content="□" Width="18" Height="15" FontSize="9" Style="{StaticResource ErpButton}" Padding="0" Margin="1,0" Click="Max_Click"/>
+                        <Button Content="✕" Width="18" Height="15" FontSize="9" Foreground="#DC2626" Style="{StaticResource ErpButton}" Padding="0" Margin="1,0"
+                                Click="Close_Click"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- 2) شريط المعلومات (القسم | السجلات | المستخدم || كود الشاشة + التاريخ) -->
+            <Border DockPanel.Dock="Top" Background="#ECE9D8" BorderBrush="#7F9DB9" BorderThickness="0,0,0,1" Padding="12,4">
+                <DockPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <TextBlock Text="القسم:" FontWeight="Bold" FontSize="11.5" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="ModuleText" Foreground="#0A246A" FontWeight="Bold" FontSize="11.5" Margin="4,0,12,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="إجمالي السجلات:" FontWeight="Bold" FontSize="11.5" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="CountText" Foreground="#008000" FontWeight="Bold" FontSize="11.5" Margin="4,0,12,0" VerticalAlignment="Center" Text="0 سجل"/>
+                        <TextBlock Text="المستخدم:" FontWeight="Bold" FontSize="11.5" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="UserText" Foreground="#0A246A" FontSize="11.5" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                        <Border Background="#DCE6F1" BorderBrush="#7F9DB9" BorderThickness="1" Padding="5,1">
+                            <TextBlock x:Name="ScreenCodeText" FontFamily="Consolas" FontWeight="Bold" Foreground="#0A246A" FontSize="11"/>
+                        </Border>
+                        <TextBlock x:Name="DateText" FontSize="11" Foreground="#555555" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- 3) شريط الأدوات -->
+            <Border DockPanel.Dock="Top" Background="#ECE9D8" BorderBrush="#7F9DB9" BorderThickness="0,0,0,1" Padding="6,4">
+                <ContentPresenter x:Name="ToolbarArea"/>
+            </Border>
+
+            <!-- 4) شريط التدقيق السفلي -->
+            <Border DockPanel.Dock="Bottom" Background="#ECE9D8" BorderBrush="#7F9DB9" BorderThickness="0,1,0,0" Padding="10,4">
+                <DockPanel>
+                    <TextBlock x:Name="AuditText" FontSize="11" Foreground="#333333" DockPanel.Dock="Right"/>
+                    <TextBlock x:Name="MachineText" FontSize="11" Foreground="#333333" DockPanel.Dock="Left"/>
+                </DockPanel>
+            </Border>
+
+            <!-- 5) منطقة المحتوى -->
+            <Border Background="#ECE9D8" Padding="8">
+                <ContentPresenter x:Name="BodyArea"/>
+            </Border>
+        </DockPanel>
+    </Border>
+</UserControl>

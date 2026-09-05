@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>أمر إنتاج {{ o.OrderNumber }} — الشركة اليمنية لتعبئة وتصنيع التمور</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm 12mm 12mm 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
+  body { background: #F8FAFC; color: #1E293B; font-size: 12px; line-height: 1.4; }
+  
+  .print-page {
+    width: 100%; max-width: 210mm; margin: 10px auto; background: #FFFFFF;
+    border: 2px solid #14532D; border-radius: 10px; padding: 16px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  }
+  .no-print-toolbar {
+    max-width: 210mm; margin: 12px auto 6px auto; display: flex; justify-content: space-between; align-items: center;
+    background: #1E293B; color: #FFFFFF; padding: 10px 18px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .btn-print {
+    background: linear-gradient(135deg, #16A34A, #15803D); color: #FFF; border: none; padding: 8px 20px;
+    border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-back { background: rgba(255,255,255,0.15); color: #FFF; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 12.5px; font-weight: bold; }
+
+  .doc-header {
+    display: grid; grid-template-columns: 1.4fr 1.8fr 1.2fr; gap: 12px; align-items: center;
+    border-bottom: 2.5px solid #14532D; padding-bottom: 12px; margin-bottom: 14px;
+  }
+  .header-left { text-align: right; font-size: 11px; color: #475569; line-height: 1.5; }
+  .co-name-ar { font-size: 15px; font-weight: 800; color: #14532D; margin-bottom: 2px; }
+  .co-name-en { font-size: 10px; font-weight: bold; color: #0F172A; letter-spacing: 0.3px; margin-bottom: 4px; direction: ltr; text-align: right; }
+  .header-center { text-align: center; }
+  .doc-badge-title {
+    display: inline-block; background: #F0FDF4; border: 2px solid #14532D; border-radius: 8px;
+    padding: 5px 20px; color: #14532D; font-size: 18px; font-weight: 800; box-shadow: 0 2px 6px rgba(20,83,45,0.15); margin-bottom: 4px;
+  }
+  .doc-sub-info { font-size: 11px; color: #334155; font-weight: bold; }
+  .header-right { text-align: left; font-size: 10.5px; color: #64748B; line-height: 1.5; direction: ltr; }
+
+  .meta-card { border: 1.5px solid #CBD5E1; border-radius: 8px; background: #F8FAFC; padding: 10px 14px; margin-bottom: 14px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 14px; font-size: 11.5px; }
+  .meta-item span { color: #64748B; font-weight: 600; }
+  .meta-item b { color: #0F172A; font-weight: 700; margin-right: 4px; }
+
+  .table-title { font-size: 13px; font-weight: 800; color: #14532D; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  table.ruled-grid {
+    width: 100%; border-collapse: collapse; margin-bottom: 12px; border: 2px solid #14532D; border-radius: 6px; overflow: hidden;
+  }
+  table.ruled-grid thead tr { background: linear-gradient(135deg, #14532D, #0B3D1F); color: #FFFFFF; }
+  table.ruled-grid th { padding: 7px 8px; font-size: 11px; font-weight: 800; border: 1px solid #14532D; text-align: center; }
+  table.ruled-grid td { padding: 6px 8px; font-size: 11.5px; border: 1px solid #CBD5E1; text-align: center; color: #1E293B; }
+  table.ruled-grid tbody tr:nth-child(even) { background: #F8FAFC; }
+  table.ruled-grid tfoot tr { background: #FEF3C7; font-weight: 800; color: #92400E; }
+
+  .sign-section {
+    margin-top: 24px; padding-top: 14px; border-top: 1.5px dashed #CBD5E1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: center;
+  }
+  .sign-box { font-size: 11px; color: #334155; }
+  .sign-role { font-weight: 800; color: #14532D; margin-bottom: 24px; }
+  .sign-line { border-top: 1px dotted #64748B; padding-top: 4px; font-size: 10px; color: #64748B; }
+
+  .doc-footer {
+    margin-top: 18px; padding-top: 8px; border-top: 1px solid #E2E8F0; display: flex; justify-content: space-between; font-size: 9.5px; color: #64748B;
+  }
+  .badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+  .badge-ok { background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }
+  .badge-warn { background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D; }
+
+  @media print {
+    body { background: #FFF; }
+    .print-page { border: none; padding: 0; box-shadow: none; max-width: 100%; margin: 0; }
+    .no-print-toolbar { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print-toolbar">
+  <div style="font-weight:bold; font-size:13.5px;">🖨️ معاينة طباعة أمر الإنتاج (مقاس A4 القياسي)</div>
+  <div style="display:flex; gap:10px;">
+    <button class="btn-print" onclick="window.print()"><span>🖨️</span> طباعة أمر الإنتاج الآن</button>
+    <a href="javascript:history.back()" class="btn-back">⬅️ عودة للنموذج</a>
+  </div>
+</div>
+
+<div class="print-page">
+    <header class="doc-header">
+    <div class="header-left">
+      <div class="co-name-ar">{{ company.CompanyNameAr or 'المنشأة' }}</div>
+      {% if company.CompanyNameEn %}<div class="co-name-en">{{ company.CompanyNameEn }}</div>{% endif %}
+      {% if company.Address %}<div>{{ company.Address }}</div>{% endif %}
+      <div>{% if company.Phone1 %}هاتف/جوال: {{ company.Phone1 }}{% endif %}{% if company.CRNumber %} • س.ت: {{ company.CRNumber }}{% endif %}{% if company.TaxNumber %} • ضريبي: {{ company.TaxNumber }}{% endif %}</div>
+    </div>
+
+    <div class="header-center">
+      {% if company.LogoPath %}
+        <div style="margin-bottom:6px;">
+          <img src="{{ company.LogoPath }}" alt="شعار المنشأة" style="max-height:65px; max-width:200px; object-fit:contain;">
+        </div>
+      {% else %}
+        <div style="font-size:32px; line-height:1; margin-bottom:4px;">🌴</div>
+      {% endif %}
+      <div class="doc-badge-title">أمر وتشغيل إنتاج التمور (Work Order)</div>
+      <div class="doc-sub-info">
+        رقم السند: <span style="color:#14532D; font-size:13px;" class="mono">{{ o.OrderNumber }}</span>
+        • الحالة: {% if o.StatusCode=='Approved' %}<span class="badge badge-ok">معتمد رسمي 🟢</span>{% elif o.StatusCode=='Draft' %}<span class="badge badge-warn">مسودة 🟡</span>{% else %}{{ o.StatusCode }}{% endif %}
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div><b>{{ company.CompanyNameEn or 'Date Processing Enterprise' }}</b></div>
+      <div>Manufacturing Operations</div>
+      <div>Date: {{ now[:10] }} • Time: {{ now[11:16] }}</div>
+    </div>
+  </header>
+
+  <div class="meta-card">
+    <div class="meta-grid">
+      <div class="meta-item"><span>العميل المالك:</span> <b>{{ o.CustomerName or 'متعدد العملاء (حسب الصنف)' }}</b></div>
+      <div class="meta-item"><span>تاريخ الإنتاج:</span> <b>{{ o.ProductionDate }}</b></div>
+      <div class="meta-item"><span>خط الإنتاج:</span> <b>{{ o.LineName or 'خط 1' }}</b></div>
+      <div class="meta-item"><span>الوردية:</span> <b>{{ o.ShiftName or 'صباحية' }}</b></div>
+      <div class="meta-item"><span>مصدر الأمر:</span> <b>{{ 'من خطة الإنتاج' if o.SourceType=='FromPlan' else 'مباشر من الاستلام' }}</b></div>
+      <div class="meta-item"><span>الخطة المصدر:</span> <b>{{ o.SourcePlanNumber or '—' }}</b></div>
+      <div class="meta-item"><span>تاريخ الاعتماد:</span> <b>{{ o.ApprovedDate or '—' }}</b></div>
+      <div class="meta-item"><span>السنة التشغيلية:</span> <b>2026</b></div>
+      {% if o.Notes %}
+      <div class="meta-item" style="grid-column: 1 / -1;"><span>البيان:</span> <b>{{ o.Notes }}</b></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-title">📦 بنود التشغيل والمنتجات التامة المستهدفة</div>
+  <table class="ruled-grid">
+    <thead>
+      <tr>
+        <th style="width:30px;">#</th>
+        <th style="width:130px; text-align:right;">العميل المالك 👤</th>
+        <th style="text-align:right;">المنتج النهائي التام المستهدف</th>
+        <th>الدفعة الخام المصدر</th>
+        <th>نوع العبوة</th>
+        <th>الكمية بالكرتون 📦</th>
+        <th>الكمية المخططة (كجم)</th>
+        <th>المنفذ الفعلي (كجم)</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td style="text-align:right; font-weight:bold; color:#0A246A;">{{ it.CustomerName or o.CustomerName or '—' }}</td>
+        <td style="text-align:right; font-weight:bold; color:#14532D;">{{ it.ProductNameAr or it.ProductName or 'تمر معبأ' }}</td>
+        <td><span class="mono">{{ it.LotCode or '—' }}</span></td>
+        <td>{{ it.PackageNameAr or 'كرتون قياسي' }}</td>
+        <td style="font-weight:bold; color:#0A246A;">{{ it.PlannedCartons or ((it.PlannedQtyKg / 7.2)|round|int) }} كرتون</td>
+        <td style="font-weight:bold; color:#14532D;">{{ "%.2f"|format(it.PlannedQtyKg) }}</td>
+        <td style="font-weight:bold; color:#15803D;">{{ "%.2f"|format(it.ProducedQtyKg or 0) }}</td>
+        <td><span class="badge badge-ok">{{ it.StatusCode or 'معتمد' }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="6" style="text-align:left; padding-right:12px;">الإجمالي الكلي لأمر الإنتاج:</td>
+        <td>{{ "%.2f"|format(o.PlannedQtyKg) }} كجم</td>
+        <td>{{ "%.2f"|format(o.ProducedQtyKg or 0) }} كجم</td>
+        <td>—</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {% if materials %}
+  <div class="table-title">🧪 جدول المواد المساعدة والتغليف المحتسبة آلياً (BOM)</div>
+  <table class="ruled-grid">
+    <thead>
+      <tr>
+        <th style="width:35px;">#</th>
+        <th style="text-align:right;">المادة المساعدة / التغليف</th>
+        <th>وحدة القياس</th>
+        <th>الكمية المحتسبة آلياً</th>
+        <th>الكمية المصروفة فعلياً</th>
+        <th>حالة الصرف</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in materials %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td style="text-align:right; font-weight:bold;">{{ m.MaterialNameAr }}</td>
+        <td>{{ m.UnitOfMeasure }}</td>
+        <td style="font-weight:bold; color:#1E40AF;">{{ "%.2f"|format(m.CalculatedQty) }}</td>
+        <td style="font-weight:bold; color:#15803D;">{{ "%.2f"|format(m.ActualIssuedQty or 0) }}</td>
+        <td><span class="badge badge-ok">{{ 'تم الصرف ✓' if (m.ActualIssuedQty or 0) > 0 else 'محتسب' }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="sign-section">
+    <div class="sign-box">
+      <div class="sign-role">مشرف صالة الإنتاج</div>
+      <div class="sign-line">التوقيع والتاريخ</div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-role">أمين مخزن المواد المساعدة</div>
+      <div class="sign-line">التوقيع والتاريخ</div>
+    </div>
+    <div class="sign-box">
+      <div class="sign-role">مدير إدارة الإنتاج / الاعتماد</div>
+      <div class="sign-line">التوقيع والختم الرسمي</div>
+    </div>
+  </div>
+
+  <footer class="doc-footer">
+    <span>{{ company.ReportFooterNote or 'الشركة اليمنية لتعبئة وتصنيع التمور — نظام الإدارة المتكامل DatePack ERP v1.43' }}</span>
+    <span>المستخدم: {{ u.FullName or u.UserName }} • تاريخ الطباعة: {{ now }} • صفحة 1 من 1</span>
+  </footer>
+</div>
+
+</body>
+</html>
