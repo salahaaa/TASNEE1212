@@ -100,6 +100,10 @@ public class DatesErpDbContext : DbContext
     public DbSet<DbVersion> DbVersions => Set<DbVersion>();
     public DbSet<NumberingScheme> NumberingSchemes => Set<NumberingScheme>();
 
+    // ── طبقة التوجيه بالمهام (§3) ──
+    public DbSet<WorkflowTask> WorkflowTasks => Set<WorkflowTask>();
+    public DbSet<WorkflowTaskHistory> WorkflowTaskHistories => Set<WorkflowTaskHistory>();
+
     /// <summary>
     /// §decimal على SQLite: المزوّد لا يخزّن decimal افتراضياً، فيُحوَّل إلى TEXT بدقة ثابتة.
     /// يسمح بإضافة حقول decimal جديدة (كميات الفحص ومعاملات التحويل) دون كسر SQLite أو SQL Server.
@@ -137,6 +141,22 @@ public class DatesErpDbContext : DbContext
                 }
             }
         }
+
+        // ── طبقة التوجيه بالمهام (§3) ──
+        // CorrelationKey فريد على مستوى القاعدة: هو الضمان الحقيقي لمنع تكرار المهام،
+        // لا الفحص في الكود — فجهازان متزامنان لا يستطيعان توليد مهمتين لنفس الحدث.
+        b.Entity<WorkflowTask>().HasIndex(t => t.CorrelationKey).IsUnique();
+        b.Entity<WorkflowTask>().HasIndex(t => t.TaskNumber).IsUnique();
+        // فهرس الاستطلاع الدوري (Q5): استعلام العدّادات كل 60 ثانية يمر من هنا
+        b.Entity<WorkflowTask>().HasIndex(t => new { t.RequiredCapability, t.State });
+        b.Entity<WorkflowTask>().HasIndex(t => new { t.AssignedUserId, t.State });
+        b.Entity<WorkflowTask>().HasIndex(t => new { t.DocumentType, t.DocumentId });
+        b.Entity<WorkflowTask>().HasIndex(t => t.BusinessDate);
+        b.Entity<WorkflowTask>().Ignore(t => t.IsOverdue); // محسوبة، لا تُخزَّن
+        b.Entity<WorkflowTask>()
+            .HasMany<WorkflowTaskHistory>().WithOne(h => h.Task).HasForeignKey(h => h.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.Entity<WorkflowTaskHistory>().HasIndex(h => h.TaskId);
 
         // ── علاقات الاستلام ──
         b.Entity<Shipment>().HasMany(s => s.Items).WithOne().HasForeignKey(i => i.ShipmentId).OnDelete(DeleteBehavior.Cascade);

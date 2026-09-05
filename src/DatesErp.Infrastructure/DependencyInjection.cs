@@ -100,6 +100,7 @@ public class NumberingService : INumberingService
         "CSD" => _db.CartonSaleDocs.Any(x => x.DocumentNumber == number),
         "PCL" => _db.PlanClosings.Any(x => x.DocumentNumber == number),
         "LOT" => _db.Lots.Any(x => x.LotCode == number),
+        "TASK" => _db.WorkflowTasks.Any(x => x.TaskNumber == number),
         _ => false
     };
 }

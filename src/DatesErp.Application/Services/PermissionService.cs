@@ -30,6 +30,9 @@ public class PermissionService
     public static readonly (string Code, string NameAr, bool Sensitive)[] OperationCatalog =
     {
         ("View", "عرض", false),
+        // §3 — «عرض الكل» عملية إشرافية منفصلة عن «عرض»: من يرى مهامه لا يرى مهام الجميع.
+        // لولا فصلها لكان منح «عرض» يمنح الإشراف الكامل بلا قصد.
+        ("ViewAll", "عرض الكل (إشراف)", false),
         ("Create", "إضافة", false),
         ("Edit", "تعديل", false),
         ("Delete", "حذف", true),
@@ -102,6 +105,8 @@ public class PermissionService
         GrantQualityCorrectionToApprovers();
         // §الإصلاح الأمني: ترحيل القواعد القائمة إلى الوحدات التي دخلت البوابة حديثاً.
         BackfillNewlyGatedModules();
+        // §3: الإشراف على كل المهام لمن يدير الصلاحيات — والمصنع يوسّعه من الشاشة.
+        GrantTaskOversightToSystemAdmins();
     }
 
     /// <summary>
@@ -117,7 +122,13 @@ public class PermissionService
     /// </summary>
     public void BackfillNewlyGatedModules()
     {
-        string[] newlyGated = { PermissionModules.Products, PermissionModules.Cartons, PermissionModules.Employees };
+        // §3: «tasks» انضمت للقائمة — كل دور يجب أن يرى مهامه هو، وإلا كانت طبقة
+        // التوجيه كلها محجوبة عن مستخدمي القاعدة المُرقّاة. «ViewAll» الإشرافية لا تُمنح هنا.
+        string[] newlyGated =
+        {
+            PermissionModules.Products, PermissionModules.Cartons,
+            PermissionModules.Employees, PermissionModules.Tasks
+        };
         var viewOp = _db.PermissionOperations.FirstOrDefault(o => o.Code == "View");
         if (viewOp == null) return;
 
@@ -136,6 +147,36 @@ public class PermissionService
                 { RoleId = roleId, ResourceId = res.Id, OperationId = viewOp.Id, IsAllowed = true });
                 added = true;
             }
+        if (added) _db.SaveChanges();
+    }
+
+    /// <summary>
+    /// §3 — بذرة معقولة لصلاحية الإشراف على المهام: من يملك «إدارة الصلاحيات» يملك
+    /// «عرض كل المهام». لا اسم دور هنا — الشرط قدرة قائمة، لا مسمى.
+    /// المصنع يمنح <c>tasks/ViewAll</c> لمن يشاء غيرهم من شاشة الصلاحيات.
+    /// idempotent: لا يكتب شيئاً بعد أول تشغيل ولا يلمس صفاً موجوداً.
+    /// </summary>
+    public void GrantTaskOversightToSystemAdmins()
+    {
+        var tasksRes = _db.PermissionResources.FirstOrDefault(r => r.Code == PermissionModules.Tasks);
+        var permRes = _db.PermissionResources.FirstOrDefault(r => r.Code == PermissionModules.Permissions);
+        var viewAllOp = _db.PermissionOperations.FirstOrDefault(o => o.Code == "ViewAll");
+        var manageOp = _db.PermissionOperations.FirstOrDefault(o => o.Code == "ManagePermissions");
+        if (tasksRes == null || permRes == null || viewAllOp == null || manageOp == null) return;
+
+        var managerRoleIds = _db.RoleResourcePermissions
+            .Where(x => x.ResourceId == permRes.Id && x.OperationId == manageOp.Id && x.IsAllowed)
+            .Select(x => x.RoleId).Distinct().ToList();
+
+        bool added = false;
+        foreach (var roleId in managerRoleIds)
+        {
+            if (_db.RoleResourcePermissions.Any(x => x.RoleId == roleId && x.ResourceId == tasksRes.Id && x.OperationId == viewAllOp.Id))
+                continue;
+            _db.RoleResourcePermissions.Add(new RoleResourcePermission
+            { RoleId = roleId, ResourceId = tasksRes.Id, OperationId = viewAllOp.Id, IsAllowed = true });
+            added = true;
+        }
         if (added) _db.SaveChanges();
     }
 

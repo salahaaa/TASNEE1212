@@ -48,6 +48,9 @@ public static class PermissionModules
     public const string Backup = "backup";
     public const string Admin = "admin";
 
+    /// <summary>§3 — «مهامي» ولوحة المهام: مورد قائم بذاته له عملياته.</summary>
+    public const string Tasks = "tasks";
+
     /// <summary>لوحة المؤشرات — مفتوحة للجميع بعد الدخول، فلا تخضع للبوابة.</summary>
     public const string Dashboard = "dashboard";
 
@@ -82,7 +85,9 @@ public static class PermissionModules
         (Permissions, "الأدوار والصلاحيات", "الإدارة"),
         (Settings, "الإعدادات والهوية", "الإدارة"),
         (Backup, "النسخ الاحتياطي والصيانة", "الإدارة"),
-        (Admin, "إدارة النظام العامة", "الإدارة")
+        (Admin, "إدارة النظام العامة", "الإدارة"),
+
+        (Tasks, "المهام وسير العمل", "الإدارة")
     };
 
     /// <summary>أكواد الوحدات فقط — تستهلكها البذور وبوابة فتح الشاشات.</summary>

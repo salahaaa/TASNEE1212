@@ -43,6 +43,7 @@ public class TestHost : IDisposable
             .AddScoped<IShiftService, DatesErp.Application.Services.ShiftService>()
             .AddScoped<IPlanProgressService, DatesErp.Application.Services.PlanProgressService>()
             .AddScoped<ITraceabilityService, DatesErp.Application.Services.TraceabilityService>()
+            .AddScoped<IWorkflowTaskService, DatesErp.Application.Services.WorkflowTaskService>()
             .AddScoped<MachineRegistry>()
             .BuildServiceProvider();
 

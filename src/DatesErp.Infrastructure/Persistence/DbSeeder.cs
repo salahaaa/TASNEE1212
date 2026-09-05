@@ -225,7 +225,8 @@ public static class DbSeeder
             new NumberingScheme { SchemeCode = "CD", SchemeName = "تسليم عميل", Prefix = "CD", LastSequence = 0 },
             new NumberingScheme { SchemeCode = "TXN", SchemeName = "حركة مخزون", Prefix = "INV", LastSequence = 0 },
             new NumberingScheme { SchemeCode = "PCL", SchemeName = "إقفال خطة", Prefix = "PCL", LastSequence = 0 },
-            new NumberingScheme { SchemeCode = "LOT", SchemeName = "دفعة خام", Prefix = "LOT", LastSequence = 0 });
+            new NumberingScheme { SchemeCode = "LOT", SchemeName = "دفعة خام", Prefix = "LOT", LastSequence = 0 },
+            new NumberingScheme { SchemeCode = "TASK", SchemeName = "مهمة سير عمل", Prefix = "TSK", LastSequence = 0 });
 
         // ── إصدار قاعدة البيانات (§31) ──
         db.DbVersions.Add(new DbVersion { VersionNumber = "1.0.0", Description = "الإصدار الأولي — المخطط الكامل" });

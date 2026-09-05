@@ -51,6 +51,8 @@ public static class AppContainer
         services.AddScoped<IShiftService, ShiftService>();
         services.AddScoped<IPlanProgressService, PlanProgressService>();
         services.AddScoped<ITraceabilityService, TraceabilityService>();
+        // §3 — محرك التوجيه بالمهام
+        services.AddScoped<IWorkflowTaskService, WorkflowTaskService>();
         services.AddScoped<MachineRegistry>();
         services.AddSingleton<ConnectionTester>();
         services.AddSingleton<DialogService>();
