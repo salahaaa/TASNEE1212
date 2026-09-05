@@ -237,6 +237,48 @@ public class PermissionService
             .Select(x => (resById[x.ResourceId], opById[x.OperationId])).ToHashSet();
     }
 
+    /// <summary>
+    /// §7 — الموروث من الأدوار فقط (بلا استثناءات المستخدم): ما يملكه المستخدم بحكم أدواره.
+    /// تستخدمه شاشة الصلاحيات لعرض عمود «من الدور» منفصلاً عن عمود «استثناء».
+    /// </summary>
+    public HashSet<(string res, string op)> GetInheritedSet(List<int> roleIds)
+    {
+        EnsureCatalog();
+        var resById = _db.PermissionResources.ToDictionary(r => r.Id, r => r.Code);
+        var opById = _db.PermissionOperations.ToDictionary(o => o.Id, o => o.Code);
+        return _db.RoleResourcePermissions.Where(x => roleIds.Contains(x.RoleId) && x.IsAllowed).ToList()
+            .Select(x => (resById[x.ResourceId], opById[x.OperationId])).ToHashSet();
+    }
+
+    /// <summary>
+    /// §7 — استثناءات المستخدم الصريحة بقيمتها: true = منح فوق الدور، false = منع رغم الدور.
+    /// غياب المفتاح = لا استثناء (وراثة صافية) — وهي الحالة الثالثة التي كان المربع المسطّح يخفيها.
+    /// </summary>
+    public Dictionary<(string res, string op), bool> GetUserExceptions(int userId)
+    {
+        EnsureCatalog();
+        var resById = _db.PermissionResources.ToDictionary(r => r.Id, r => r.Code);
+        var opById = _db.PermissionOperations.ToDictionary(o => o.Id, o => o.Code);
+        return _db.UserResourcePermissions.Where(x => x.UserId == userId).ToList()
+            .ToDictionary(x => (resById[x.ResourceId], opById[x.OperationId]), x => x.IsAllowed);
+    }
+
+    /// <summary>
+    /// §7 — إزالة الاستثناء نهائياً فيعود المستخدم إلى وراثة دوره.
+    /// (كانت مستحيلة سابقاً: المربع المسطّح لا يفرّق بين «لا استثناء» و«منع صريح».)
+    /// </summary>
+    public void ClearUserPermission(int userId, string resCode, string opCode)
+    {
+        var res = _db.PermissionResources.FirstOrDefault(r => r.Code == resCode) ?? throw new DomainException("مورد غير معروف.");
+        var op = _db.PermissionOperations.FirstOrDefault(o => o.Code == opCode) ?? throw new DomainException("عملية غير معروفة.");
+        var row = _db.UserResourcePermissions.FirstOrDefault(x => x.UserId == userId && x.ResourceId == res.Id && x.OperationId == op.Id);
+        if (row == null) return;
+        string oldV = row.IsAllowed ? "استثناء: مسموح" : "استثناء: ممنوع";
+        _db.UserResourcePermissions.Remove(row);
+        Log(null, userId, resCode, opCode, oldV, "وراثة من الدور", "inherit");
+        _db.SaveChanges();
+    }
+
     public HashSet<(string res, string op)> GetUserSet(int userId)
     {
         EnsureCatalog();

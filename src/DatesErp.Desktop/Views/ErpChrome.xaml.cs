@@ -48,10 +48,23 @@ public partial class ErpChrome : UserControl
     public void SetCount(int count) => CountText.Text = $"{count} سجل";
     /// <summary>شريط الأدوات الحالي — تستخدمه الاختصارات العامة (F2/F3/F5/F9/F10/Ctrl+P).</summary>
     public ErpToolbar CurrentToolbar { get; private set; }
+    /// <summary>
+    /// §12 — وحدة الصلاحيات لهذه الشاشة (products / employees / ...). تضعها MainWindow مرة واحدة
+    /// عند فتح الشاشة من كتالوج الشاشات، فتسري بوابة الأزرار على الشريط تلقائياً بلا تعديل في الشاشات.
+    /// </summary>
+    public string PermissionModule { get; private set; }
+
+    public void SetPermissionModule(string module)
+    {
+        PermissionModule = module;
+        CurrentToolbar?.ForModule(module);
+    }
+
     public void SetToolbar(UIElement toolbar)
     {
         ToolbarArea.Content = toolbar;
         CurrentToolbar = toolbar as ErpToolbar;
+        if (!string.IsNullOrWhiteSpace(PermissionModule)) CurrentToolbar?.ForModule(PermissionModule);
     }
     public void SetBody(UIElement body) => BodyArea.Content = body;
 

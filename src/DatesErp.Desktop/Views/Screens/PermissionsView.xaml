@@ -49,11 +49,23 @@
                 </DockPanel>
                 <DockPanel Grid.Row="1" Margin="0,8,0,0">
                     <TextBlock x:Name="OpsTitle" DockPanel.Dock="Top" Text="اختر مورداً من الشجرة لعرض عملياته" FontWeight="Bold" Foreground="#0A246A" Margin="0,0,0,4"/>
+                    <!-- §7: تمييز الموروث عن الاستثناء — عمود قراءة للموروث، وعمود ثلاثي للاستثناء، والمحصلة معروضة -->
+                    <TextBlock x:Name="HintText" DockPanel.Dock="Top" Text="اختر دوراً أو مستخدماً لعرض العمليات."
+                               Foreground="#475569" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button Content="↩ إعادة الكل للوراثة" Style="{StaticResource ErpButton}" Click="ResetToInherited_Click" Padding="8,2"
+                                ToolTip="يحذف كل استثناءات المستخدم المحدد فيعود إلى ما ترثه أدواره بالضبط"/>
+                    </StackPanel>
                     <DataGrid x:Name="OpsGrid" AutoGenerateColumns="False" RowHeight="30" BorderThickness="1">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="العملية" Binding="{Binding NameAr}" Width="*" IsReadOnly="True"/>
                             <DataGridTextColumn Header="تنبيه" Binding="{Binding SensitiveMark}" Width="60" IsReadOnly="True"/>
-                            <DataGridCheckBoxColumn Header="السماح" Binding="{Binding Allowed, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+                            <DataGridCheckBoxColumn x:Name="InheritedCol" Header="من الدور" Width="80"
+                                                    Binding="{Binding Inherited, UpdateSourceTrigger=PropertyChanged}"/>
+                            <DataGridCheckBoxColumn x:Name="ExceptionCol" Header="استثناء" Width="80" IsThreeState="True"
+                                                    Binding="{Binding Exception, UpdateSourceTrigger=PropertyChanged}"/>
+                            <DataGridTextColumn Header="الفعلي" Binding="{Binding EffectiveText}" Width="80" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="المصدر" Binding="{Binding StateText}" Width="190" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

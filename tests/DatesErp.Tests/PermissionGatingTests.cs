@@ -270,6 +270,77 @@ public class PermissionGatingTests
         Assert.DoesNotContain(("cartons", "View"), svc.GetRoleSet(role.Id));
     }
 
+    // ═══════════ 5) §7 — تمييز الموروث عن الاستثناء ═══════════
+
+    /// <summary>
+    /// §7: المستخدم قد يكون «موروثاً مسموحاً» ثم يُمنع صراحةً. الشاشة كانت تعرض مربعاً واحداً
+    /// فيستحيل تمييز «ممنوع صراحةً» عن «غير موروث». هنا نثبت أن الطبقة تفصل المصدرين.
+    /// </summary>
+    [Fact]
+    public void Inherited_And_Exception_Are_Reported_Separately()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        using var db = Db(host);
+        var svc = new PermissionService(db, host.Services.GetRequiredService<ICurrentSession>());
+        svc.EnsureCatalog();
+
+        var user = db.Users.Single(u => u.UserName == "quality");
+        var roleIds = db.UserRoles.Where(ur => ur.UserId == user.Id && ur.IsActive).Select(ur => ur.RoleId).ToList();
+
+        var inherited = svc.GetInheritedSet(roleIds);
+        Assert.Contains(("quality", "View"), inherited);       // موروث من دوره
+        Assert.Empty(svc.GetUserExceptions(user.Id));           // ولا استثناء بعد
+
+        // منع صريح رغم الوراثة
+        svc.SetUserPermission(user.Id, "quality", "View", false);
+        var exc = svc.GetUserExceptions(user.Id);
+        Assert.False(exc[("quality", "View")]);                 // الاستثناء = منع
+        Assert.Contains(("quality", "View"), svc.GetInheritedSet(roleIds)); // الوراثة لم تتغير
+        Assert.False(svc.BuildEffectiveCache(user.Id, roleIds)[("quality", "View")]); // المحصلة: ممنوع
+    }
+
+    /// <summary>
+    /// §7: إلغاء الاستثناء يعيد المستخدم إلى وراثة دوره تماماً — عملية كانت مستحيلة
+    /// بالمربع المسطّح (كل إلغاء تحديد كان يُكتب «منعاً صريحاً» دائماً).
+    /// </summary>
+    [Fact]
+    public void Clearing_Exception_Restores_Role_Inheritance()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        using var db = Db(host);
+        var svc = new PermissionService(db, host.Services.GetRequiredService<ICurrentSession>());
+        svc.EnsureCatalog();
+
+        var user = db.Users.Single(u => u.UserName == "quality");
+        var roleIds = db.UserRoles.Where(ur => ur.UserId == user.Id && ur.IsActive).Select(ur => ur.RoleId).ToList();
+
+        svc.SetUserPermission(user.Id, "quality", "View", false);
+        Assert.False(svc.BuildEffectiveCache(user.Id, roleIds)[("quality", "View")]);
+
+        svc.ClearUserPermission(user.Id, "quality", "View");
+
+        Assert.Empty(svc.GetUserExceptions(user.Id));
+        Assert.True(svc.BuildEffectiveCache(user.Id, roleIds)[("quality", "View")]); // عاد للوراثة
+    }
+
+    /// <summary>إلغاء استثناء غير موجود لا يرمي ولا يكتب شيئاً (idempotent).</summary>
+    [Fact]
+    public void Clearing_Missing_Exception_Is_NoOp()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        using var db = Db(host);
+        var svc = new PermissionService(db, host.Services.GetRequiredService<ICurrentSession>());
+        svc.EnsureCatalog();
+        var user = db.Users.Single(u => u.UserName == "quality");
+
+        svc.ClearUserPermission(user.Id, "quality", "View");
+
+        Assert.Empty(svc.GetUserExceptions(user.Id));
+    }
+
     private static SessionContext LoginAsRole(TestHost host, string userName)
     {
         var session = host.Services.GetRequiredService<SessionContext>();

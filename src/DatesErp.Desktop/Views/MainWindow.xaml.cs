@@ -238,7 +238,12 @@ public partial class MainWindow : Window
             _currentScreen = code;
             var def = ScreenCatalog.All.FirstOrDefault(s => s.Code == code);
             CrumbCurrent.Text = def?.Title ?? code;
-            ContentArea.Content = ScreenFactory.Create(code);
+            var content = ScreenFactory.Create(code);
+            // §12 — بوابة الأزرار المركزية: تُطبَّق هنا مرة واحدة لكل الشاشات المؤطَّرة،
+            // فيختفي كل زر لا يملك المستخدم عمليته بدل أن يضغطه ثم يرفضه الخادم.
+            if (content is ErpChrome chrome && !string.IsNullOrEmpty(def?.Module))
+                chrome.SetPermissionModule(def.Module);
+            ContentArea.Content = content;
             SetNavVisible(code == "dashboard" || code.StartsWith("dashboard:"));
         }
         catch (Exception ex)
