@@ -608,6 +608,30 @@ public class QualityService : ServiceBase, IQualityService
                 // §نظام الوحدات: بنود الفحص منتجات تامة فقط (المجموعة 002)
                 UnitsPolicy.RequireItemType(Db, it.ProductId, "Finished", "بند فحص الجودة");
 
+                // §قاعدة الوحدات: الإنتاج التام بالكرتون والكيلو وزن مكافئ يُشتق من تعريف العبوة.
+                // الجودة كانت المرحلة الوحيدة التي لا تربط الرقمين، فيمرّ محضر بكراتين
+                // وكيلو متناقضين (مقبول 100 كرتون = 750 كجم مع تسجيل 500 كجم) — والمحضر
+                // مصدر سقف التسليم، فيتسرب الخلل إلى التام وسند العميل.
+                int? packOfItem = order?.Items
+                    .FirstOrDefault(oi => oi.ProductId == it.ProductId
+                                       && (it.LotId == null || oi.LotId == it.LotId))?.PackagingTypeId
+                    ?? order?.Items.FirstOrDefault(oi => oi.ProductId == it.ProductId)?.PackagingTypeId;
+                double ctnW = UnitsPolicy.CartonWeight(Db, it.ProductId, packOfItem);
+                if (ctnW > 0)
+                {
+                    // الكراتين مُدخَلة ⟵ الكيلو يجب أن يطابقها (لكل مقدار على حدة)
+                    it.AcceptedQtyKg = UnitsPolicy.EnsureCartonKgConsistency(Db, it.ProductId, packOfItem,
+                        it.AcceptedQtyKg, (int)Math.Round(it.AcceptedCartons), "بند فحص الجودة — المقبول");
+                    it.RejectedQtyKg = UnitsPolicy.EnsureCartonKgConsistency(Db, it.ProductId, packOfItem,
+                        it.RejectedQtyKg, (int)Math.Round(it.RejectedCartons), "بند فحص الجودة — المرفوض");
+                    it.CheckedQtyKg = UnitsPolicy.EnsureCartonKgConsistency(Db, it.ProductId, packOfItem,
+                        it.CheckedQtyKg, (int)Math.Round(it.CheckedCartons), "بند فحص الجودة — المفحوص");
+                    // الكيلو وحده مُدخَل ⟵ تُشتق الكراتين فلا يبقى المحضر بلا وحدته الأساسية
+                    if (it.AcceptedCartons <= 0 && it.AcceptedQtyKg > 0) it.AcceptedCartons = Math.Round(it.AcceptedQtyKg / ctnW, 2);
+                    if (it.RejectedCartons <= 0 && it.RejectedQtyKg > 0) it.RejectedCartons = Math.Round(it.RejectedQtyKg / ctnW, 2);
+                    if (it.CheckedCartons <= 0 && it.CheckedQtyKg > 0) it.CheckedCartons = Math.Round(it.CheckedQtyKg / ctnW, 2);
+                }
+
                 // §تتبع الصنف: الفحص يستقبل فقط أصناف الأمر بهويتها الفعلية — لا صنف خارج الأمر
                 if (order != null && order.Items.Count > 0 && !order.Items.Any(i => i.ProductId == it.ProductId))
                 {
