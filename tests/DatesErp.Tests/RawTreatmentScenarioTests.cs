@@ -49,7 +49,7 @@ public class RawTreatmentScenarioTests
         var receiving = host.Get<IReceivingService>();
         var r = receiving.SaveShipment(1, "2026-09-01", "2026-09-01", new List<ShipmentItemDto>
         {
-            new() { ProductId = raw.Id, PackagingTypeId = 2, PackageCount = TotalBaskets,
+            new() { ProductId = raw.Id, PackagingTypeId = 3, PackageCount = TotalBaskets,
                     UnitWeightKg = BasketKg, QtyKg = TotalBaskets * BasketKg, ReceiptUnit = "سلة" }
         });
         Assert.True(r.Ok, r.Message);
@@ -250,20 +250,20 @@ public class RawTreatmentScenarioTests
                 new List<PlanItemDto>
                 {
                     new() { SourceType = "FromReceiving", LotId = sc.LotId, CustomerId = 1, ProductId = 3,
-                            PlannedQtyKg = 60000, PlannedCartons = 8000, ScheduledDate = "2026-09-20",
+                            PlannedQtyKg = 22500, PlannedCartons = 3000, ScheduledDate = "2026-09-20",
                             SuggestedShiftId = 1, SuggestedLineId = 1, PriorityNo = 1 }
                 });
             Assert.True(p.Ok, p.Message);
             Assert.True(planning.ApprovePlan(p.Id).Ok);
 
             var lot = Reload(sc);
-            Assert.Equal(60000, lot.ReservedQtyKg, 1);
-            Assert.Equal(40000, lot.AvailableQtyKg, 1);   // 2,000 سلة فقط للخطط الأخرى
+            Assert.Equal(22500, lot.ReservedQtyKg, 1);
+            Assert.Equal(77500, lot.AvailableQtyKg, 1);
 
             // §المحجوز لخطة معتمدة لا يجوز إدخاله المعالجة: كان سيعطّل خطة قائمة بلا إنذار
             var grab = sc.Trt.Start(new TreatmentStartDto
             {
-                LotId = sc.LotId, QtyKg = 50000, PackageCount = 2500, DurationHours = 24
+                LotId = sc.LotId, QtyKg = 90000, PackageCount = 4500, DurationHours = 24
             });
             Assert.False(grab.Ok);
             Assert.Contains("المحجوز لخطط", grab.Message);
@@ -271,7 +271,7 @@ public class RawTreatmentScenarioTests
             // بينما غير المحجوز يُقبل
             Assert.True(sc.Trt.Start(new TreatmentStartDto
             {
-                LotId = sc.LotId, QtyKg = 40000, PackageCount = 2000, DurationHours = 24
+                LotId = sc.LotId, QtyKg = 77500, PackageCount = 3875, DurationHours = 24
             }).Ok);
         }
     }

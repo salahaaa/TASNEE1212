@@ -43,7 +43,7 @@ public class RawTreatmentPhase3Tests
         var rec = host.Get<IReceivingService>();
         var r = rec.SaveShipment(1, "2026-09-01", "2026-09-01", new List<ShipmentItemDto>
         {
-            new() { ProductId = raw.Id, PackagingTypeId = 2, PackageCount = (int)baskets,
+            new() { ProductId = raw.Id, PackagingTypeId = 3, PackageCount = (int)baskets,
                     UnitWeightKg = BasketKg, QtyKg = baskets * BasketKg, ReceiptUnit = "سلة" }
         });
         Assert.True(r.Ok, r.Message);
@@ -193,7 +193,7 @@ public class RawTreatmentPhase3Tests
         var c = Setup(requiresTreatment: false);
         using (c.Host)
         {
-            var p = MakePlan(c, 30000, DateTime.Now.AddDays(3).ToString("dd/MM/yyyy"));
+            var p = MakePlan(c, 15000, DateTime.Now.AddDays(3).ToString("dd/MM/yyyy"));
             Assert.True(p.Ok, p.Message);
             var appr = c.Plan.ApprovePlan(p.Id);
             Assert.True(appr.Ok, appr.Message);
@@ -247,7 +247,7 @@ public class RawTreatmentPhase3Tests
 
             // لا شيء أُفرج عنه بعد ⟵ صرف الخام عند الإقفال يجب أن يُرفض
             var closed = c.Host.Get<IExecutionService>().CloseProductionDay(
-                orderId, 5000, 667, 0, 0, 0, false, null, false, consumedRawKg: 5000);
+                orderId, 5000, 666, 0, 0, 0, false, null, false, consumedRawKg: 5000);
             Assert.False(closed.Ok);
             Assert.Contains("لم تكتمل معالجتها", closed.Message);
 
@@ -291,7 +291,7 @@ public class RawTreatmentPhase3Tests
         {
             int orderId = ManualOrder(c, 5000);
             var closed = c.Host.Get<IExecutionService>().CloseProductionDay(
-                orderId, 5000, 667, 0, 0, 0, false, null, false, consumedRawKg: 5000);
+                orderId, 5000, 666, 0, 0, 0, false, null, false, consumedRawKg: 5000);
             Assert.True(closed.Ok, closed.Message);
         }
     }
