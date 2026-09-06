@@ -66,7 +66,12 @@ public class PlanningPrintModel
             ShiftName = db.Shifts.Where(s => s.Id == (shiftId ?? 0)).Select(s => s.ShiftNameAr).FirstOrDefault() ?? "-",
             LineName = db.ProductionLines.Where(l => l.Id == (lineId ?? 0)).Select(l => l.LineNameAr).FirstOrDefault() ?? "-",
             Notes = plan.Notes ?? "",
-            PlanTypeAr = plan.PlanType switch { "Daily" => "يومية", "Weekly" => "أسبوعية", _ => "فترة محددة" }
+            // §إصلاح: كانت "Monthly" تسقط في _ فتُطبع الخطة الشهرية بعنوان «فترة محددة».
+            // المطابقة الآن مع PlanClosureService.cs:41 — مصطلح واحد في كل المستندات.
+            PlanTypeAr = plan.PlanType switch
+            {
+                "Daily" => "يومية", "Weekly" => "أسبوعية", "Monthly" => "شهرية", _ => "فترية"
+            }
         };
         if (co != null)
         {

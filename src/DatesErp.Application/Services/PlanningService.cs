@@ -174,9 +174,13 @@ public class PlanningService : ServiceBase, IPlanningService
             // §B80: + رفض أي تاريخ بند خارج فترة الخطة.
             ApplyDefaultScheduledDates(items, sd, ed);
             // §B76: خطة العميل الواحد لا تقبل تسريب عملاء آخرين — فرض من الخلفية لا من الواجهة فقط
-            if ((scopeMode ?? "Multi") == "Single" && singleCustomerId != null)
+            // §إصلاح ثغرة: كان الفحص على scopeMode **الوارد** لا على المحفوظ في الخطة، فاستدعاء
+            // UpdatePlan بـ scopeMode=null على خطة Single قائمة يتخطى الحارس كلياً — مع أن
+            // السطر أعلاه يُبقي plan.ScopeMode = "Single". النتيجة: بنود عميل آخر تدخل خطة
+            // عميل واحد. نفحص الآن القيمة الفعلية بعد الدمج.
+            if (plan.ScopeMode == "Single" && plan.SingleCustomerId != null)
                 foreach (var dtoC in items)
-                    if (dtoC.CustomerId != singleCustomerId)
+                    if (dtoC.CustomerId != plan.SingleCustomerId)
                         throw new DomainException("خطة العميل الواحد لا تقبل بنوداً لعميل آخر — كل البنود يجب أن تكون للعميل المحدد في الرأس.");
 
             // §حرج: حارس الطاقة يشترط وردية على البند، فكان أي بند بلا SuggestedShiftId
@@ -377,6 +381,27 @@ public class PlanningService : ServiceBase, IPlanningService
         }
     }
 
+    /// <summary>
+    /// §إعادة احتساب حجز دفعات بعينها **من الواقع** — بلا افتراض وجود خطة بذاتها.
+    /// تلزم بعد حذف خطة: <see cref="ApplyLotReservations"/> تبني الحجز حول خطة قائمة،
+    /// وهنا لم تعد قائمة، فيُجمع المتبقي من الخطط النشطة وحدها.
+    /// </summary>
+    private void RecomputeLotReservations(List<int> lotIds)
+    {
+        foreach (var lid in lotIds ?? new List<int>())
+        {
+            var lot = Db.Lots.FirstOrDefault(l => l.Id == lid);
+            if (lot == null) continue;
+            double reserved = Db.ProductionPlanItems
+                .Where(i => i.LotId == lid)
+                .Join(Db.ProductionPlans, i => i.PlanId, p => p.Id, (i, p) => new { i, p })
+                .Where(x => x.p.Status != DocStatuses.Closed && x.p.Status != DocStatuses.Cancelled && !x.p.IsClosed)
+                .Where(x => !x.i.IsClosed)
+                .Sum(x => x.i.PlannedQtyKg - x.i.ProducedQtyKg);
+            lot.ReservedQtyKg = Math.Max(0, reserved);
+        }
+    }
+
     /// <summary>§الطاقة اللحظية: المتاح/المستخدم/المتبقي للوردية والخط في تاريخ محدد.</summary>
     public ShiftCapacityInfo GetShiftCapacityInfo(int shiftId, int lineId, string date, int? productId = null, int? excludePlanId = null)
     {
@@ -485,9 +510,23 @@ public class PlanningService : ServiceBase, IPlanningService
             return OpResult.Fail("لا يمكن حذف خطة صدرت منها أوامر إنتاج.");
         return RunOp(() =>
         {
+            // §إصلاح تسرّب حجز: الحذف كان يزيل الخطة وبنودها (Cascade) بلا إعادة احتساب
+            // الحجوزات، فتبقى ReservedQtyKg على الدفعة محجوزة لخطة لم تعد موجودة —
+            // كمية مجمّدة إلى الأبد لا يحرّرها شيء، ولا شاشة تفسّر سببها.
+            // نصفّر بنود الخطة أولاً ثم نعيد الاحتساب، فتُطرح حصتها كما في الإقفال.
+            var affectedLots = plan.Items.Where(i => i.LotId != null)
+                .Select(i => i.LotId.Value).Distinct().ToList();
+            plan.Status = DocStatuses.Cancelled;
+            plan.IsClosed = true;
+            ApplyLotReservations(plan);
+
             Db.ProductionPlans.Remove(plan);
             Db.SaveChanges();
-            return OpResult.Success("تم حذف الخطة (المسودة).");
+
+            // §بعد الحذف الفعلي نعيد الاحتساب من الواقع: أي حجز متبقٍ يعود لخطط أخرى فقط.
+            RecomputeLotReservations(affectedLots);
+            Db.SaveChanges();
+            return OpResult.Success("تم حذف الخطة (المسودة) وتحرير حجوزات دفعاتها.");
         });
     }
 
@@ -1319,6 +1358,15 @@ public class PlanningService : ServiceBase, IPlanningService
     /// </summary>
     private static void ApplyDefaultScheduledDates(List<PlanItemDto> items, DateTime? planStart, DateTime? planEnd = null)
     {
+        // §إصلاح: فترة مقلوبة (النهاية قبل البداية) كانت تمرّ بصمت — الحارس أدناه يشترط
+        // planEnd >= planStart فيُلغي نفسه، فتُقبل كل التواريخ بلا فحص وتُحفظ خطة
+        // بفترة مستحيلة. الرفض هنا صراحةً بدل تعطيل الحارس ضمناً.
+        if (planStart != null && planEnd != null && planEnd.Value.Date < planStart.Value.Date)
+            throw new DomainException(
+                $"فترة الخطة غير صحيحة: تاريخ النهاية ({planEnd.Value.Date.ToString(UiFormat.DatePattern)}) "
+                + $"قبل تاريخ البداية ({planStart.Value.Date.ToString(UiFormat.DatePattern)}).",
+                "INVALID_PERIOD");
+
         string fallback = (planStart ?? DateTime.Today).Date.ToString(UiFormat.DatePattern);
         foreach (var i in items)
             if (!UiFormat.TryParseDate(i.ScheduledDate, out _))
