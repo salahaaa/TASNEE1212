@@ -51,7 +51,9 @@ public partial class MainWindow : Window
         _idleTimer.Start();
 
         KeyDown += MainWindow_KeyDown;
-        Loaded += (_, _) => OpenScreen("dashboard");
+        // §7 — «مهامي» شاشة ما بعد الدخول لا خيار في القائمة: الموظف يرى عمله فور دخوله.
+        // ارتداد آمن للوحة إن لم يكن يملك حتى عرض مهامه (قاعدة قديمة قبل الترحيل).
+        Loaded += (_, _) => OpenScreen(MayOpen("mytasks") ? "mytasks" : "dashboard");
     }
 
     /// <summary>
@@ -145,6 +147,7 @@ public partial class MainWindow : Window
         }
 
         // الروابط الفرعية (المعتمدة)
+        AddSubItem("🗂  مهامي", () => OpenScreen("mytasks"));
         AddSubItem("•  مركز التقارير الموحد", () => OpenScreen("reports"));
         AddSubItem("▶  لوحة المؤشرات (Dashboard)", () => OpenScreen("dashboard"), true);
         AddSubItem("•  التحليلات والإحصائيات", () => OpenScreen("reports"));
@@ -215,6 +218,21 @@ public partial class MainWindow : Window
     /// §B94 — بوابة الصلاحيات المركزية: لا دخول لأي شاشة (قائمة أو قفزة أو بطاقة لوحة)
     /// بلا صلاحية (الوحدة / عرض). اللوحة للجميع؛ الرفض برسالة تسمي الصلاحية المطلوبة.
     /// </summary>
+    /// <summary>
+    /// فحص صامت: هل يستطيع فتح الشاشة؟ **بلا رسالة خطأ.**
+    /// ضروري للهبوط بعد الدخول — لولاه لانبثقت رسالة رفض في وجه كل مستخدم
+    /// لا يملك «مهامي» قبل أن يرى النظام أصلاً.
+    /// </summary>
+    public bool MayOpen(string code)
+    {
+        if (code == "dashboard" || code.StartsWith("dashboard:")) return true;
+        var def = ScreenCatalog.All.FirstOrDefault(s => s.Code == code);
+        string module = def?.Module;
+        if (string.IsNullOrEmpty(module) || !GatedModules.Contains(module)) return true;
+        try { return AppContainer.Get<SessionContext>().Can(module, "View"); }
+        catch (Exception ex) { Services.ErrorLog.Write(ex, "MayOpen"); return true; }
+    }
+
     public bool CanOpenScreen(string code)
     {
         if (code == "dashboard" || code.StartsWith("dashboard:")) return true;
@@ -223,7 +241,13 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(module) || !GatedModules.Contains(module)) return true;
         bool ok = true;
         try { ok = AppContainer.Get<SessionContext>().Can(module, "View"); }
-        catch { ok = true; } // الجلسة غير جاهزة (بدء التشغيل) — لا نقفل الشاشة
+        catch (Exception ex)
+        {
+            // الجلسة غير جاهزة (بدء التشغيل) — نسمح: الخادم يفرض الصلاحية على أي حال،
+            // والإقفال هنا كان سيمنع بناء الشاشات قبل تسجيل الدخول. يُسجَّل ولا يُبتلع صامتاً.
+            Services.ErrorLog.Write(ex, "CanOpenScreen");
+            ok = true;
+        }
         if (!ok)
             AppContainer.Get<DialogService>().Error(
                 $"لا تملك صلاحية عرض «{def?.Title ?? code}».\nالصلاحية المطلوبة: {module} / عرض — راجع مدير النظام لمنحها.");

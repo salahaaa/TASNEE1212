@@ -23,6 +23,8 @@ public static class ScreenCatalog
     public static readonly List<ScreenDef> All = new()
     {
         new("dashboard", "الرئيسية", "لوحة المؤشرات", "dashboard", "📊", "MRPDSH1000"),
+        // §7 — «مهامي»: شاشة ما بعد الدخول. الموظف لا يبحث عن عمله.
+        new("mytasks", "الرئيسية", "مهامي", "tasks", "🗂", "MRPWFT1000"),
 
         // ⚙️ إدارة النظام
         new("users", "إدارة النظام", "المستخدمون", "users", "👥", "MRPMAS1002"),

@@ -449,6 +449,87 @@ public class WorkflowTaskTests
         Assert.Equal(0, svc.GetMyCounters(session.UserId).Live);
     }
 
+    // ═══════════ 6) المرحلة 2 — ما تعتمد عليه شاشة «مهامي» ═══════════
+
+    /// <summary>
+    /// كل دور نشط يملك «عرض مهامه» بعد الترحيل، ولا يملك «عرض الكل» الإشرافية.
+    /// لولا الأول لحُجبت شاشة «مهامي» عن كل مستخدمي القاعدة المُرقّاة؛ ولولا الثاني
+    /// لصار كل مستخدم مشرفاً على مهام الجميع.
+    /// </summary>
+    [Fact]
+    public void Every_Role_Sees_Own_Tasks_But_Not_Everyones()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        var db = host.Get<DatesErpDbContext>();
+        var svc = new PermissionService(db, host.Services.GetRequiredService<ICurrentSession>());
+        svc.EnsureCatalog();
+
+        foreach (var role in db.Roles.Where(r => r.IsActive).ToList())
+        {
+            var set = svc.GetRoleSet(role.Id);
+            Assert.Contains((PermissionModules.Tasks, "View"), set);
+            if (role.RoleCode is not ("Administrator" or "Management"))
+                Assert.DoesNotContain((PermissionModules.Tasks, "ViewAll"), set);
+        }
+    }
+
+    /// <summary>مهام مستند بعينه — أساس زر «أين وصل هذا المستند».</summary>
+    [Fact]
+    public void GetForDocument_Returns_Tasks_Of_That_Document_Only()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        var svc = Svc(host);
+        var db = host.Get<DatesErpDbContext>();
+
+        svc.Raise(PlanApprovalRequest(1, "PLN-0001"));
+        svc.Raise(PlanApprovalRequest(2, "PLN-0002"));
+        db.SaveChanges();
+
+        var forOne = svc.GetForDocument(WorkflowDocTypes.ProductionPlan, 1);
+        Assert.Single(forOne);
+        Assert.Equal("PLN-0001", forOne[0].DocumentNumber);
+    }
+
+    /// <summary>لقطة الملخص تُحفظ وتُقرأ كما هي — البطاقة تعرضها بلا استعلام إضافي.</summary>
+    [Fact]
+    public void Summary_Snapshot_Round_Trips()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        var svc = Svc(host);
+        var db = host.Get<DatesErpDbContext>();
+
+        var r = PlanApprovalRequest();
+        r.SummaryJson = "{\"العملاء\":3,\"الكمية\":\"12,500 كجم\"}";
+        var t = svc.Raise(r);
+        db.SaveChanges();
+
+        Assert.Equal(r.SummaryJson, svc.GetById(t.Id).SummaryJson);
+    }
+
+    /// <summary>المهمة الملتقَطة تظهر في تبويب «قيد العمل» لصاحبها.</summary>
+    [Fact]
+    public void Claimed_Task_Moves_To_InProgress_For_Owner()
+    {
+        using var host = new TestHost();
+        var session = host.LoginAsAdmin();
+        var svc = Svc(host);
+        var db = host.Get<DatesErpDbContext>();
+
+        var t = svc.Raise(PlanApprovalRequest());
+        db.SaveChanges();
+        svc.Claim(t.Id, session.UserId);
+
+        var mine = svc.GetMyTasks(session.UserId);
+        Assert.Single(mine, x => x.Id == t.Id && x.State == WorkflowTaskStates.InProgress);
+
+        var c = svc.GetMyCounters(session.UserId);
+        Assert.Equal(1, c.InProgress);
+        Assert.Equal(0, c.Open);
+    }
+
     /// <summary>«كل المهام» صلاحية إشرافية يفرضها الخادم.</summary>
     [Fact]
     public void GetAllTasks_Requires_ViewAll_Capability()
