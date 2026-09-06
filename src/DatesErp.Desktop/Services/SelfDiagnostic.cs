@@ -48,6 +48,8 @@ public static class SelfDiagnostic
         CheckIdentity();
         CheckDatabase();
         CheckSeedData();
+        CheckOperational();
+        CheckDataIntegrity();
         if (includeScreens) CheckScreens();
 
         Line("");
@@ -105,6 +107,27 @@ public static class SelfDiagnostic
         RunCore(db => DatesErp.Application.Services.DiagnosticCore.CheckSeedData(db));
     }
 
+    /// <summary>
+    /// §الإعداد التشغيلي — ما يطلبه الكود بالاسم (مخازن، مخططات ترقيم، موارد صلاحيات).
+    /// غيابه لا يظهر عند بدء التشغيل بل عند أول استخدام، فيبدو عطلاً عشوائياً في شاشة بريئة.
+    /// </summary>
+    private static void CheckOperational()
+    {
+        Section("3) الإعداد التشغيلي — المخازن والترقيم وموارد الصلاحيات");
+        RunCore(db => DatesErp.Application.Services.DiagnosticCore.CheckOperational(db));
+    }
+
+    /// <summary>
+    /// §اتساق البيانات — العطل الصامت: لا استثناء ولا منع حفظ، بل **أرقام خاطئة**
+    /// يُبنى عليها قرار. أخطر من العطل الظاهر، لأن الظاهر يوقف العمل والخاطئ يمرّ ويُعتمد.
+    /// </summary>
+    private static void CheckDataIntegrity()
+    {
+        Section("4) اتساق البيانات — الأرصدة والالتزامات والتتبع");
+        Line("  (تُبلّغ ولا تُصلح: تصحيح الأرصدة قرار محاسبي لا تقني)");
+        RunCore(db => DatesErp.Application.Services.DiagnosticCore.CheckDataIntegrity(db));
+    }
+
     private static void RunCore(Func<DatesErpDbContext, List<DatesErp.Application.Services.DiagnosticCore.Finding>> act)
     {
         try
@@ -125,7 +148,7 @@ public static class SelfDiagnostic
 
     private static void CheckScreens()
     {
-        Section("3) إنشاء الشاشات وسلامة أزرارها");
+        Section("5) إنشاء الشاشات وسلامة أزرارها");
         Line("  (كل شاشة تُبنى فعلياً، ثم يُفحص أن لكل زر فيها معالجاً)");
 
         int screens = 0, deadButtons = 0;

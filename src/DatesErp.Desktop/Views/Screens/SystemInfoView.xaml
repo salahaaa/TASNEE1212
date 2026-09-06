@@ -101,7 +101,7 @@
             <StackPanel>
                 <TextBlock Text="🩺 الفحص الذاتي" FontWeight="Bold" FontSize="15" Foreground="#1B4D3E" Margin="0,0,0,4"/>
                 <TextBlock FontSize="12" Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,8"
-                           Text="يفحص الاتصال · اكتمال جداول القاعدة وأعمدتها · البيانات الأولية · إنشاء كل شاشة · وجود معالج لكل زر. ثم يكتب تقريراً نصياً ترسله للمطوّر بدل وصف المشكلة بالكلام."/>
+                           Text="يفحص الاتصال · اكتمال جداول القاعدة وأعمدتها · البيانات الأولية · المخازن ومخططات الترقيم وموارد الصلاحيات · اتساق الأرصدة والالتزامات والتتبع · إنشاء كل شاشة ووجود معالج لكل زر. ثم يكتب تقريراً نصياً ترسله للمطوّر بدل وصف المشكلة بالكلام."/>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="🩺 تشغيل الفحص الذاتي الآن" Style="{StaticResource ErpApproveButton}" Click="RunSelfTest_Click"/>
                     <Button Content="📂 فتح مجلد التقارير" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0" Click="OpenReportFolder_Click"/>
