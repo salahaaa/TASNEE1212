@@ -53,6 +53,7 @@ public static class AppContainer
         services.AddScoped<ITraceabilityService, TraceabilityService>();
         // §3 — محرك التوجيه بالمهام
         services.AddScoped<IWorkflowTaskService, WorkflowTaskService>();
+        services.AddScoped<IRawTreatmentService, RawTreatmentService>();
         services.AddScoped<MachineRegistry>();
         services.AddSingleton<ConnectionTester>();
         services.AddSingleton<DialogService>();
