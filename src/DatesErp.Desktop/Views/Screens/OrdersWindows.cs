@@ -208,7 +208,9 @@ public class NewOrderPanel : UserControl
                     ? db.PackagingTypes.Where(p => p.Id == it.PackagingTypeId).Select(p => p.UnitWeightKg).FirstOrDefault()
                     : 0;
                 if (packW <= 0) packW = db.Products.Where(p => p.Id == it.ProductId).Select(p => p.CartonWeightKg).FirstOrDefault();
-                if (packW <= 0) packW = 7.2;
+                // §B85/M3: لا وزن مخترع — الاحتياطي 7.2 كان يُسند بصمت فيُبطل حارس
+                // «وزن الكرتون غير معرَّف» في Create() فلا يُرمى أبداً، ويُشتق وزن وهمي.
+                // يبقى 0 ليكشفه الحارس برسالة تسمي الصنف.
                 _rows.Add(new ItemRowUi
                 {
                     Src = it,
@@ -218,7 +220,8 @@ public class NewOrderPanel : UserControl
                     RawDisplay = $"{it.RawName} ({it.LotRemainingKg:N0} كجم)",
                     ProductName = it.ProductName,
                     // §نظام الوحدات: وزن الكرتون من تعريف العبوة/المنتج — ظاهر للمستخدم قبل الإنشاء
-                    PackName = $"{it.PackName ?? "-"} = {packW:N1} كجم/كرتون",
+                    PackName = packW > 0 ? $"{it.PackName ?? "-"} = {packW:N1} كجم/كرتون"
+                                         : $"{it.PackName ?? "-"} = ⛔ وزن الكرتون غير معرَّف",
                     PlannedKg = it.PlannedKg,
                     PlannedCartons = it.PlannedCartons,
                     OrderedKg = it.OrderedKg,
@@ -226,7 +229,9 @@ public class NewOrderPanel : UserControl
                     RemainingKg = Math.Round(it.RemainingKg, 1),
                     RemainingCartons = it.RemainingCartons,
                     QtyKg = Math.Round(it.RemainingKg, 1),
-                    Cartons = it.RemainingCartons > 0 ? it.RemainingCartons : (it.RemainingKg > 0 ? (int)Math.Ceiling(it.RemainingKg / packW) : 0),
+                    Cartons = it.RemainingCartons > 0
+                        ? it.RemainingCartons
+                        : (it.RemainingKg > 0 && packW > 0 ? (int)Math.Ceiling(it.RemainingKg / packW) : 0),
                     PackWeight = packW,
                     ScheduledDate = string.IsNullOrWhiteSpace(it.ScheduledDate) ? "—" : it.ScheduledDate,
                     ShiftName = it.SuggestedShiftId != null
@@ -326,13 +331,20 @@ public class NewOrderPanel : UserControl
             int shiftId = _shiftBox.SelectedIndex >= 0 ? _shifts[_shiftBox.SelectedIndex].id : 1;
             int lineId = _lineBox.SelectedIndex >= 0 ? _lines[_lineBox.SelectedIndex].id : 1;
             string date = _date.SelectedDate.Value.ToString("dd/MM/yyyy");
+            if (_planBox.SelectedIndex < 0 || _plans.Count == 0)
+            {
+                AppContainer.Get<DialogService>().Error(
+                    "⛔ لم تُحدَّد خطة إنتاج.\n\nلا توجد خطة معتمدة وغير مقفلة، أو لم تُختر خطة من القائمة.\n" +
+                    "اعتمد خطة إنتاج أولاً، ثم اخترها من «خطة الإنتاج المعتمدة» واضغط «⬇ إنزال بنود الخطة».");
+                return;
+            }
             int planId = _plans[_planBox.SelectedIndex].id;
 
             using var scope = AppContainer.NewScope();
             var svc = scope.ServiceProvider.GetRequiredService<IProductionOrderService>();
             var created = new List<string>();
 
-            if (!_autoSplit.IsChecked == true)
+            if (_autoSplit.IsChecked != true)
             {
                 // §إصلاح: أمر لكل (عميل × يوم إنتاج مجدول × وردية) — لا أمر واحد بكل الأيام.
                 // كان كل بنود خطة الـ14 يوماً تأخذ تاريخاً واحداً فتُهدر جدولة الخطة.
