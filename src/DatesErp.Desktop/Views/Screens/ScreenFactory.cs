@@ -8,6 +8,14 @@ public static class ScreenFactory
 {
     private const string Company = "الشركة اليمنية لتعبئة وتصنيع التمور";
 
+    private static UIElement TreatmentScreen()
+    {
+        var v = new RawTreatmentView();
+        var c = new ErpChrome { TitleText = "[MAIN] - [نظام إدارة وتصنيع التمور - معالجة وتعقيم الخام] - (" + Company + ")" };
+        v.AttachChrome(c);
+        return c;
+    }
+
     private static UIElement MyTasksScreen()
     {
         var v = new MyTasksView();
@@ -122,6 +130,7 @@ public static class ScreenFactory
     {
         "dashboard" => new DashboardView(),
         "mytasks" => MyTasksScreen(),
+        "treatment" => TreatmentScreen(),
 
         // بيانات أساسية (قوائم عامة)
         "customers" => Wrap(GenericListView.ForCustomers(), "العملاء", "البيانات الأساسية", "MRPMAS1006"),
