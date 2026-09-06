@@ -140,6 +140,32 @@ public partial class ReportService
                     PDate("from", "من تاريخ"), PDate("to", "إلى تاريخ"), PCust()
                 }
             },
+            // §إصلاح: كان التقريران منفَّذين بالكامل (shipment_full: 204 سطر + 187 سطر اختبارات،
+            // و shipment_tracking) لكن بلا ReportDefinition — فلا يظهران في القائمة ولا يمكن فتحهما
+            // إطلاقاً. الاختبارات مرّت لأنها تستدعي Run() مباشرةً متجاوزةً القائمة.
+            new()
+            {
+                Code = "shipment_full",
+                TitleAr = "تقرير الشحنة الشامل — كشف حساب تمور العميل (الدخول، الأوامر، المخرجات، المتبقي)",
+                Category = "التتبع",
+                Parameters = new()
+                {
+                    new() { Key = "shipment", LabelAr = "الشحنة (اختياري)", Kind = "list", Options = shipments },
+                    PDate("from", "من تاريخ"), PDate("to", "إلى تاريخ"), PCust()
+                }
+            },
+            new()
+            {
+                Code = "shipment_tracking",
+                TitleAr = "تتبع الشحنة — دفتر الحركة والرصيد الجاري",
+                Category = "التتبع",
+                Parameters = new()
+                {
+                    // §مطلوب: الدالة تُرجع تنبيهاً إن لم تُختر شحنة.
+                    new() { Key = "shipment", LabelAr = "الشحنة", Kind = "list", Options = shipments },
+                    PDate("from", "من تاريخ"), PDate("to", "إلى تاريخ")
+                }
+            },
             new()
             {
                 Code = "warehouse_full",

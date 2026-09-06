@@ -57,6 +57,8 @@ public partial class ReportService : ServiceBase, IReportService
         }
         // §العملية الشاملة لتطوير التقارير: الحزمة الاحترافية (7 تقارير)
         list.AddRange(GetProfessionalDefinitions());
+        // §المعالجة والتعقيم: حزمة تقارير الدورة (سجل + متأخرات + أداء المدد).
+        list.AddRange(GetTreatmentDefinitions());
         return list;
     }
 
@@ -365,7 +367,8 @@ public partial class ReportService : ServiceBase, IReportService
             {
                 // §مرحلة التقارير: التقارير الجديدة (العمليات + الشاملة + الاحترافية)
                 var nr = RunNewReports(reportCode, parameters, from, to, custId, prodId)
-                    ?? RunProfessional(reportCode, parameters, from, to, custId, prodId);
+                    ?? RunProfessional(reportCode, parameters, from, to, custId, prodId)
+                    ?? RunTreatmentReports(reportCode, parameters, from, to, custId, prodId);
                 if (nr != null)
                 {
                     if (string.IsNullOrWhiteSpace(nr.PeriodLabel)) nr.PeriodLabel = PeriodText(from, to);
