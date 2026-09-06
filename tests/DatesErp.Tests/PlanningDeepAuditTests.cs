@@ -382,4 +382,72 @@ public class PlanningDeepAuditTests
         Assert.True(u.Ok, u.Message);
         Assert.Equal(3000, Reserved(host, lot), 1);   // 400 × 7.5 — لا 7500 + 3000
     }
+
+    // ═══════════════════ 6) مسار التعديل الثاني: UpdatePlanItem ═══════════════════
+
+    /// <summary>
+    /// تعديل كمية بند مفرد يجب أن يعيد احتساب حجز الدفعة.
+    /// قبل الإصلاح: PlanProgressService.UpdatePlanItem يحفظ PlannedQtyKg الجديدة بلا
+    /// تحديث ReservedQtyKg — تخفيض 1000⟵400 كرتون يترك 4,500 كجم محجوزة بلا سند.
+    /// (المسار الآخر PlanningService.UpdatePlan يستدعي ApplyLotReservations.)
+    /// </summary>
+    [Fact]
+    public void UpdatePlanItem_Recomputes_Lot_Reservation_On_Quantity_Change()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        int lot = ReceiveLot(host, Cust1, 100000);
+        var planning = Svc<IPlanningService>(host);
+
+        var p = planning.SavePlan("تعديل بند", "Daily", "01/10/2026", "01/10/2026",
+            Shift1, Line1, new List<PlanItemDto> { Item(Cust1, lot, 1000, "01/10/2026") });
+        Assert.True(p.Ok, p.Message);
+        Assert.Equal(7500, Reserved(host, lot), 1);
+
+        int itemId;
+        using (var db = FreshDb(host))
+            itemId = db.ProductionPlanItems.First(i => i.PlanId == p.Id).Id;
+
+        // 400 كرتون × 7.5 = 3,000 كجم
+        var upd = Svc<IPlanProgressService>(host).UpdatePlanItem(itemId, newQtyKg: 3000);
+        Assert.True(upd.Ok, upd.Message);
+
+        Assert.Equal(3000, Reserved(host, lot), 1);   // لا 7,500 المتجمدة
+    }
+
+    /// <summary>
+    /// رفض تغيير العميل لا يجوز أن يترك تعديلات جزئية على البند.
+    /// قبل الإصلاح: التاريخ والكمية تُسنَد ثم يُفحص العميل ويُرفض، فتبقى التعديلات
+    /// في ChangeTracker ويكتبها أول SaveChanges لاحق — رفض ظاهر وتعديل فعلي.
+    /// </summary>
+    [Fact]
+    public void UpdatePlanItem_Rejected_Customer_Change_Leaves_No_Partial_Edit()
+    {
+        using var host = new TestHost();
+        host.LoginAsAdmin();
+        int c2 = AddCustomer(host, "C002", "مصنع النخيل");
+        int lot = ReceiveLot(host, Cust1, 100000);
+        var planning = Svc<IPlanningService>(host);
+
+        var p = planning.SavePlan("ثبات", "Weekly", "01/10/2026", "07/10/2026",
+            Shift1, Line1, new List<PlanItemDto> { Item(Cust1, lot, 1000, "01/10/2026") });
+        Assert.True(p.Ok, p.Message);
+
+        int itemId;
+        using (var db = FreshDb(host))
+            itemId = db.ProductionPlanItems.First(i => i.PlanId == p.Id).Id;
+
+        // تاريخ جديد صالح + عميل لا يملك الدفعة ⟵ يجب أن يُرفض الطلب كله
+        var upd = Svc<IPlanProgressService>(host)
+            .UpdatePlanItem(itemId, newDate: "03/10/2026", newCustomerId: c2);
+        Assert.False(upd.Ok);
+        Assert.Contains("مملوكة لعميل آخر", upd.Message);
+
+        using (var db = FreshDb(host))
+        {
+            var it = db.ProductionPlanItems.First(i => i.Id == itemId);
+            Assert.Equal(Cust1, it.CustomerId);                          // العميل لم يتغير
+            Assert.Equal(new DateTime(2026, 10, 1), it.ScheduledDate);   // ولا التاريخ
+        }
+    }
 }

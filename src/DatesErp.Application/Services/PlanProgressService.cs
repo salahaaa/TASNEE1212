@@ -268,6 +268,18 @@ public class PlanProgressService : ServiceBase, IPlanProgressService
                 lotWarn = $" ⚠ الكمية الجديدة ({targetQty:N1} كجم) تتجاوز رصيد الدفعة المتاح ({lot.InStockQtyKg - lot.UnderTreatmentQtyKg - reservedOthers:N1} كجم) — مقبولة (ماء التشغيل) وراجعها في التنفيذ.";
         }
 
+        // §إصلاح: كان فحص ملكية الدفعة للعميل الجديد يقع **بعد** إسناد التاريخ والصنف
+        // والعبوة والكمية على الكيان المتتبَّع. فعند رفضه تعود OpResult.Fail بينما
+        // التعديلات باقية في ChangeTracker، فيكتبها أول SaveChanges لاحق في نفس النطاق
+        // — رفض ظاهر وتعديل فعلي. كل الفحوص تسبق كل الإسنادات الآن.
+        if (newCustomerId != null && item.LotId != null)
+        {
+            var ownerPre = Db.Lots.AsNoTracking().Where(l => l.Id == item.LotId)
+                .Select(l => l.CustomerId).FirstOrDefault();
+            if (ownerPre != null && ownerPre != newCustomerId)
+                return OpResult.Fail("لا يمكن تغيير العميل: الدفعة مملوكة لعميل آخر.");
+        }
+
         // تطبيق التغييرات بعد نجاح كل الفحوص
         string changes = "";
         item.ScheduledDate = targetDate;
@@ -284,18 +296,29 @@ public class PlanProgressService : ServiceBase, IPlanProgressService
         }
         if (newQtyKg != null) item.PlannedQtyKg = targetQty;
         if (recompute) item.PlannedCartons = targetCartons;
-        if (newCustomerId != null)
-        {
-            // منع إسناد بند لعميل غير مالك الدفعة
-            if (item.LotId != null)
-            {
-                var owner = Db.Lots.AsNoTracking().Where(l => l.Id == item.LotId).Select(l => l.CustomerId).FirstOrDefault();
-                if (owner != null && owner != newCustomerId)
-                    return OpResult.Fail("لا يمكن تغيير العميل: الدفعة مملوكة لعميل آخر.");
-            }
-            item.CustomerId = newCustomerId;
-        }
+        if (newCustomerId != null) item.CustomerId = newCustomerId;  // §الملكية فُحصت أعلاه قبل أي إسناد
+
+        // §إصلاح تسرّب حجز: تعديل كمية البند كان يحفظ PlannedQtyKg الجديدة بلا تحديث
+        // ReservedQtyKg على الدفعة، فيبقى الحجز على الكمية القديمة. تخفيض 1000⟵400
+        // يترك 600 محجوزة بلا سند، ورفعها يترك الفارق غير محجوز فتُخطط مرتين.
+        // (المسار الآخر UpdatePlan يستدعي ApplyLotReservations — هذا المسار كان يفوته.)
+        int? touchedLot = item.LotId;
         Db.SaveChanges();
+        if (touchedLot != null && newQtyKg != null)
+        {
+            var lotR = Db.Lots.FirstOrDefault(l => l.Id == touchedLot.Value);
+            if (lotR != null)
+            {
+                double reserved = Db.ProductionPlanItems
+                    .Where(i => i.LotId == touchedLot.Value)
+                    .Join(Db.ProductionPlans, i => i.PlanId, p => p.Id, (i, p) => new { i, p })
+                    .Where(x => x.p.Status != DocStatuses.Closed && x.p.Status != DocStatuses.Cancelled && !x.p.IsClosed)
+                    .Where(x => !x.i.IsClosed)
+                    .Sum(x => x.i.PlannedQtyKg - x.i.ProducedQtyKg);
+                lotR.ReservedQtyKg = Math.Max(0, reserved);
+                Db.SaveChanges();
+            }
+        }
         return OpResult.Success($"تم تعديل البند — التاريخ {targetDate:dd/MM/yyyy}{changes} — وأُعيد فحص الطاقة تلقائياً." + lotWarn);
     }
 
