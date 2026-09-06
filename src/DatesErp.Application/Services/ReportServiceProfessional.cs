@@ -99,7 +99,7 @@ public partial class ReportService
     private ReportResult RawInventory(int? custId, int? prodId)
     {
         var r = new ReportResult { TitleAr = "كشف أرصدة المواد الخام بالدفعات", RowLinks = new System.Collections.Generic.List<DatesErp.Core.Interfaces.Services.DocLinkDto>() };
-        r.Columns.AddRange(new[] { "الدفعة", "الصنف الخام", "العميل", "تاريخ الدفعة", "المستلم (كجم)", "المخزون (كجم)", "محجوز (كجم)", "المتاح (كجم)", "مسلَّم (كجم)", "الفاقد (كجم)", "الحالة" });
+        r.Columns.AddRange(new[] { "الدفعة", "الصنف الخام", "العميل", "تاريخ الدفعة", "المستلم (كجم)", "المخزون (كجم)", "محجوز (كجم)", "تحت المعالجة (كجم)", "جاهز للإنتاج (كجم)", "المتاح (كجم)", "مسلَّم (كجم)", "الفاقد (كجم)", "الحالة" });
         var q = Db.Lots.AsNoTracking().AsQueryable();
         if (custId != null) q = q.Where(l => l.CustomerId == custId);
         if (prodId != null) q = q.Where(l => l.ProductId == prodId);
@@ -112,14 +112,22 @@ public partial class ReportService
                 Db.Products.AsNoTracking().Where(p => p.Id == l.ProductId).Select(p => p.ProductNameAr).FirstOrDefault() ?? "-",
                 l.CustomerId != null ? Db.Customers.AsNoTracking().Where(c => c.Id == l.CustomerId).Select(c => c.CustomerName).FirstOrDefault() ?? "-" : "-",
                 l.LotDate?.ToString("dd/MM/yyyy") ?? "-",
-                l.InitialQtyKg, l.InStockQtyKg, l.ReservedQtyKg, l.AvailableQtyKg, l.DeliveredQtyKg, l.WastageQtyKg,
-                l.InStockQtyKg <= 0.001 ? "منتهية ⚪" : l.ReservedQtyKg > 0 ? "محجوزة جزئياً 🟠" : "متاحة 🟢"
+                l.InitialQtyKg, l.InStockQtyKg, l.ReservedQtyKg,
+                // §المعالجة والتعقيم: العمودان يفسّران نقص «المتاح» — بدونهما يبدو
+                // الرقم خطأً في النظام لا نتيجة معالجة جارية.
+                l.UnderTreatmentQtyKg, l.TreatmentReadyQtyKg,
+                l.AvailableQtyKg, l.DeliveredQtyKg, l.WastageQtyKg,
+                l.InStockQtyKg <= 0.001 ? "منتهية ⚪"
+                    : l.UnderTreatmentQtyKg > 0.001 ? "تحت المعالجة 🟠"
+                    : l.ReservedQtyKg > 0 ? "محجوزة جزئياً 🟠" : "متاحة 🟢"
             });
             r.RowLinks.Add(new DocLinkDto { DocType = "receiving", Id = l.ShipmentId ?? 0 });
         }
         r.Summary["عدد الدفعات"] = lots.Count.ToString();
         r.Summary["إجمالي المستلم (كجم)"] = lots.Sum(l => l.InitialQtyKg).ToString("N1");
         r.Summary["إجمالي المخزون (كجم)"] = lots.Sum(l => l.InStockQtyKg).ToString("N1");
+        r.Summary["إجمالي تحت المعالجة (كجم)"] = lots.Sum(l => l.UnderTreatmentQtyKg).ToString("N1");
+        r.Summary["إجمالي الجاهز للإنتاج (كجم)"] = lots.Sum(l => l.TreatmentReadyQtyKg).ToString("N1");
         r.Summary["إجمالي المتاح (كجم)"] = lots.Sum(l => l.AvailableQtyKg).ToString("N1");
         return r;
     }

@@ -264,8 +264,8 @@ public class PlanProgressService : ServiceBase, IPlanProgressService
             double reservedOthers = Db.ProductionPlanItems.AsNoTracking()
                 .Where(x => x.LotId == item.LotId && x.Id != item.Id && x.PlanId != item.PlanId)
                 .Sum(x => x.PlannedQtyKg);
-            if (lot != null && targetQty + reservedOthers > lot.InStockQtyKg + 0.001)
-                lotWarn = $" ⚠ الكمية الجديدة ({targetQty:N1} كجم) تتجاوز رصيد الدفعة المتاح ({lot.InStockQtyKg - reservedOthers:N1} كجم) — مقبولة (ماء التشغيل) وراجعها في التنفيذ.";
+            if (lot != null && targetQty + reservedOthers > lot.InStockQtyKg - lot.UnderTreatmentQtyKg + 0.001)
+                lotWarn = $" ⚠ الكمية الجديدة ({targetQty:N1} كجم) تتجاوز رصيد الدفعة المتاح ({lot.InStockQtyKg - lot.UnderTreatmentQtyKg - reservedOthers:N1} كجم) — مقبولة (ماء التشغيل) وراجعها في التنفيذ.";
         }
 
         // تطبيق التغييرات بعد نجاح كل الفحوص

@@ -352,7 +352,7 @@ public interface IPlanningService
     OpResult DeletePlan(int planId);
     OpResult ClosePlan(int planId, string notes);
     /// <summary>الدفعات المتاحة للتخطيط مع المتبقي بعد خصم الخطط النشطة — لكل الأصناف.</summary>
-    List<AvailableLotDto> GetAvailableLots(int? customerId = null);
+    List<AvailableLotDto> GetAvailableLots(int? customerId = null, DateTime? forDate = null);
     List<DatesErp.Core.Domain.Entities.Product> GetPlannableProducts(int? lotId = null);
     /// <summary>الأصناف التامة الصالحة للتخطيط في نافذة الاختيار: المجموعة 002 أو بدون مجموعة (مطابق لفلتر v1.59).</summary>
     List<Product> GetFinishedProducts();
@@ -568,6 +568,18 @@ public class AvailableLotDto
     public double InitialQtyKg { get; set; }
     public double ReservedQtyKg { get; set; }
     public double RemainingKg { get; set; }
+
+    // §المعالجة والتعقيم — أعمدة العرض التي تفسّر الرقم بدل أن يبدو نقصاً غامضاً
+    /// <summary>هل الصنف يشترط معالجة؟ إن كان false فبقية الحقول لا تُقيّد شيئاً.</summary>
+    public bool RequiresTreatment { get; set; }
+    /// <summary>🟢 الجاهز للإنتاج الآن.</summary>
+    public double ReadyNowKg { get; set; }
+    /// <summary>🟠 تحت المعالجة — غير متاح.</summary>
+    public double UnderTreatmentKg { get; set; }
+    /// <summary>المتوقع اكتمال معالجته حتى تاريخ الخطة.</summary>
+    public double ExpectedReadyByDateKg { get; set; }
+    /// <summary>المتاح فعلياً للتخطيط في ذلك التاريخ بعد الحجز.</summary>
+    public double AvailableForDateKg { get; set; }
 }
 
 public interface IProductionOrderService

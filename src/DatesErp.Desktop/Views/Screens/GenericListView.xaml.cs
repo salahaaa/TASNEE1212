@@ -510,13 +510,16 @@ public partial class GenericListView : UserControl
     }
 
     public static GenericListView ForLots() => new("الدفعات Lots — (المستلم / المصروف للإنتاج / المتبقي / المسلَّم)", db => (
-        new() { "الدفعة", "الصنف", "العميل", "المستلم (كجم)", "المصروف للإنتاج (كجم)", "المتبقي (كجم)", "المحجوز للخطط (كجم)", "المتاح (كجم)", "المسلَّم (كجم)" },
+        new() { "الدفعة", "الصنف", "العميل", "المستلم (كجم)", "المصروف للإنتاج (كجم)", "المتبقي (كجم)", "المحجوز للخطط (كجم)", "تحت المعالجة (كجم)", "جاهز للإنتاج (كجم)", "المتاح (كجم)", "المسلَّم (كجم)" },
         db.Lots.ToList().Select(l => new object[]
         {
             l.LotCode,
             db.Products.Where(p => p.Id == l.ProductId).Select(p => p.ProductNameAr).FirstOrDefault(),
             db.Customers.Where(c => c.Id == l.CustomerId).Select(c => c.CustomerName).FirstOrDefault(),
-            l.InitialQtyKg, l.ProducedQtyKg, l.InStockQtyKg, l.ReservedQtyKg, l.AvailableQtyKg, l.DeliveredQtyKg
+            l.InitialQtyKg, l.ProducedQtyKg, l.InStockQtyKg, l.ReservedQtyKg,
+            // §المعالجة والتعقيم: يفسّران نقص «المتاح» بدل أن يبدو خطأً في النظام
+            l.UnderTreatmentQtyKg, l.TreatmentReadyQtyKg,
+            l.AvailableQtyKg, l.DeliveredQtyKg
         }).ToList()));
 
     public static GenericListView ForExecutions() => new("متابعة التنفيذ", db => (

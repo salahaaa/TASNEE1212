@@ -328,7 +328,7 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
 
             var lot = pi.LotId != null ? Db.Lots.AsNoTracking().FirstOrDefault(l => l.Id == pi.LotId) : null;
             // §B86/L2: متبقي الدفعة الحقيقي = الرصيد − حجوزات الخطط − الأوامر المستقلة (بلا ازدواج: أمر الخطة داخل حصة خطته)
-            double lotAvail = lot?.InStockQtyKg ?? 0;
+            double lotAvail = lot != null ? Math.Max(0, lot.InStockQtyKg - lot.UnderTreatmentQtyKg) : 0;
             if (lot != null)
             {
                 double planLive = Db.ProductionPlanItems.AsNoTracking()
@@ -343,7 +343,8 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
                     .Where(x => x.o.Status != DocStatuses.Cancelled && x.o.Status != DocStatuses.Closed)
                     .Where(x => !x.i.IsClosed)
                     .Sum(x => x.i.PlannedQtyKg - x.i.ProducedQtyKg > 0 ? x.i.PlannedQtyKg - x.i.ProducedQtyKg : 0);
-                lotAvail = Math.Max(0, lot.InStockQtyKg - planLive - standaloneLive);
+                // §المعالجة والتعقيم (الموضع 11): بوابة أمر الإنتاج تستبعد ما تحت المعالجة
+                lotAvail = Math.Max(0, lot.InStockQtyKg - lot.UnderTreatmentQtyKg - planLive - standaloneLive);
             }
             result.Add(new OrderableItemDto
             {

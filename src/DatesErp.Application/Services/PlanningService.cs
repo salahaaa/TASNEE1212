@@ -275,7 +275,77 @@ public class PlanningService : ServiceBase, IPlanningService
             .Where(x => x.o.Status != DocStatuses.Cancelled && x.o.Status != DocStatuses.Closed)
             .Where(x => !x.i.IsClosed)
             .Sum(x => x.i.PlannedQtyKg - x.i.ProducedQtyKg > 0 ? x.i.PlannedQtyKg - x.i.ProducedQtyKg : 0);
-        return Math.Max(0, Math.Round(lot.InStockQtyKg - planCommitted - orderCommitted, 3));
+        // §المعالجة والتعقيم (الموضعان 8 و9): ما هو داخل دورة معالجة جارية ليس متاحاً
+        return Math.Max(0, Math.Round(lot.InStockQtyKg - lot.UnderTreatmentQtyKg - planCommitted - orderCommitted, 3));
+    }
+
+    /// <summary>
+    /// §المعالجة والتعقيم — يتحقق أن خام كل بند سيكون **جاهزاً في تاريخ إنتاج ذلك البند**.
+    ///
+    /// يُرجع رسالة الرفض أو <c>null</c> إن كان كل شيء سليماً. الرسالة تذكر
+    /// **الرقم والسبب وأقرب موعد ممكن** — لأن المخطِّط يحتاج أن يعرف متى يستطيع،
+    /// لا أن يُمنع وحسب.
+    ///
+    /// البنود بلا دفعة أو بلا تاريخ لا تُفحص: لا مرجع خام لها.
+    /// </summary>
+    private string CheckTreatmentReadiness(ProductionPlan plan)
+    {
+        // نجمع الطلب لكل (دفعة، تاريخ) حتى لا يمر بندان صغيران يتجاوزان معاً المتاح
+        var demand = plan.Items
+            .Where(i => i.LotId != null && i.ScheduledDate != null && !i.IsClosed)
+            .GroupBy(i => (LotId: i.LotId.Value, Day: i.ScheduledDate.Value.Date))
+            .Select(g => new { g.Key.LotId, g.Key.Day, Kg = g.Sum(x => x.PlannedQtyKg) })
+            .ToList();
+        if (demand.Count == 0) return null;
+
+        var lotIds = demand.Select(d => d.LotId).Distinct().ToList();
+        var lots = Db.Lots.AsNoTracking().Where(l => lotIds.Contains(l.Id)).ToList();
+        var gated = Db.Products.AsNoTracking()
+            .Where(p => p.RequiresTreatment).Select(p => p.Id).ToHashSet();
+
+        foreach (var d in demand.OrderBy(x => x.Day))
+        {
+            var lot = lots.FirstOrDefault(l => l.Id == d.LotId);
+            if (lot == null || !gated.Contains(lot.ProductId)) continue; // صنف لا يشترط معالجة
+
+            var end = d.Day.AddDays(1).AddTicks(-1);
+            var live = Db.RawTreatments.AsNoTracking()
+                .Where(t => t.LotId == lot.Id && t.Status == TreatmentStatuses.InProgress)
+                .Select(t => new { t.ExpectedReadyAt, Kg = t.QtyKg - t.ReleasedQtyKg - t.RejectedQtyKg })
+                .ToList();
+
+            double maturing = live.Where(t => t.ExpectedReadyAt <= end).Sum(t => Math.Max(0, t.Kg));
+            // §الحجوزات الأخرى تُطرح: خطة معتمدة أخرى التزام قائم لا يُنقض ضمناً
+            double reservedOthers = Db.ProductionPlanItems.AsNoTracking()
+                .Where(i => i.LotId == lot.Id && i.PlanId != plan.Id && !i.IsClosed)
+                .Join(Db.ProductionPlans.AsNoTracking(), i => i.PlanId, p => p.Id, (i, p) => new { i, p })
+                .Where(x => x.p.Status != DocStatuses.Closed && x.p.Status != DocStatuses.Cancelled && !x.p.IsClosed)
+                .Sum(x => (double?)(x.i.PlannedQtyKg - x.i.ProducedQtyKg)) ?? 0;
+
+            double availableForDate = Math.Max(0,
+                lot.TreatmentReadyQtyKg + maturing - Math.Max(0, reservedOthers) - lot.ProducedQtyKg);
+            if (d.Kg <= availableForDate + 0.001) continue;
+
+            // أقرب تاريخ تكتمل فيه الكمية المطلوبة — البديل العملي بدل «غير كافٍ»
+            string soonest = "لا توجد معالجة جارية تكفي — ابدأ معالجة الكمية الناقصة.";
+            double cum = Math.Max(0, lot.TreatmentReadyQtyKg - Math.Max(0, reservedOthers) - lot.ProducedQtyKg);
+            foreach (var t in live.OrderBy(t => t.ExpectedReadyAt))
+            {
+                cum += Math.Max(0, t.Kg);
+                if (cum >= d.Kg - 0.001)
+                {
+                    soonest = $"أقرب موعد لاكتمال الكمية: {t.ExpectedReadyAt:dd/MM/yyyy}.";
+                    break;
+                }
+            }
+
+            return $"⛔ لا يمكن اعتماد الخطة: خام الدفعة {lot.LotCode} لن يكون جاهزاً يوم {d.Day:dd/MM/yyyy}.\n"
+                 + $"المطلوب: {d.Kg:N1} كجم | الجاهز حالياً: {lot.TreatmentReadyQtyKg:N1} كجم"
+                 + $" | المتوقع جاهزيته حتى ذلك التاريخ: {maturing:N1} كجم"
+                 + (reservedOthers > 0.001 ? $" | المحجوز لخطط أخرى: {reservedOthers:N1} كجم" : "")
+                 + $"\nالمتاح للتخطيط في ذلك التاريخ: {availableForDate:N1} كجم.\n{soonest}";
+        }
+        return null;
     }
 
     private void ApplyLotReservations(ProductionPlan plan)
@@ -351,7 +421,8 @@ public class PlanningService : ServiceBase, IPlanningService
             .Where(x => !x.i.IsClosed)
             .Sum(x => x.i.PlannedQtyKg - x.i.ProducedQtyKg > 0 ? x.i.PlannedQtyKg - x.i.ProducedQtyKg : 0);
 
-        return Math.Max(0, Math.Round(lot.InStockQtyKg - planCommitted - orderCommitted, 3));
+        // §المعالجة والتعقيم (الموضعان 8 و9): ما هو داخل دورة معالجة جارية ليس متاحاً
+        return Math.Max(0, Math.Round(lot.InStockQtyKg - lot.UnderTreatmentQtyKg - planCommitted - orderCommitted, 3));
     }
 
     /// <summary>§7 — إرسال الخطة للمدير العام للاعتماد الرسمي.</summary>
@@ -459,6 +530,11 @@ public class PlanningService : ServiceBase, IPlanningService
             }
         }
 
+        // §المعالجة والتعقيم — حارس الاعتماد: لا تُعتمد خطة على خام لن يكون جاهزاً
+        // في تاريخ إنتاجها. الفحص **حسب تاريخ كل بند** لا حسب إجمالي المستلم.
+        var treatMsg = CheckTreatmentReadiness(plan);
+        if (treatMsg != null) return OpResult.Fail(treatMsg);
+
         return RunOp(() =>
         {
             plan.IsApproved = true;
@@ -489,8 +565,15 @@ public class PlanningService : ServiceBase, IPlanningService
         });
     }
 
-    /// <summary>§12/§13 — الدفعات المتاحة مع خصم كل الخطط النشطة لكل الأصناف.</summary>
-    public List<AvailableLotDto> GetAvailableLots(int? customerId = null)
+    /// <summary>
+    /// §12/§13 — الدفعات المتاحة مع خصم كل الخطط النشطة لكل الأصناف.
+    ///
+    /// §المعالجة والتعقيم (الموضع 7): يُطرح <c>UnderTreatmentQtyKg</c> أيضاً، ويُحسب
+    /// <c>AvailableForDateKg</c> حين يُمرَّر <paramref name="forDate"/>.
+    /// **المعامل اختياري بقيمة null = السلوك القديم حرفياً**، فلا تتأثر أي شاشة
+    /// قائمة لا تمرّره — التزاماً بمنع حذف أي وظيفة قائمة.
+    /// </summary>
+    public List<AvailableLotDto> GetAvailableLots(int? customerId = null, DateTime? forDate = null)
     {
         var q = Db.Lots.AsQueryable();
         // §B67: فلترة العميل تشمل الدفعات التي ورثت عميلها من سند الاستلام (بيانات قديمة
@@ -498,7 +581,7 @@ public class PlanningService : ServiceBase, IPlanningService
         if (customerId != null)
             q = q.Where(l => l.CustomerId == customerId
                 || (l.CustomerId == null && Db.Shipments.Any(x => x.Id == l.ShipmentId && x.CustomerId == customerId)));
-        return q.Where(l => l.Status == DocStatuses.Approved && l.InStockQtyKg > 0)
+        var rows = q.Where(l => l.Status == DocStatuses.Approved && l.InStockQtyKg > 0)
             .Select(l => new AvailableLotDto
             {
                 LotId = l.Id,
@@ -512,12 +595,48 @@ public class PlanningService : ServiceBase, IPlanningService
                 ArrivalDate = Db.Shipments.Where(x => x.Id == l.ShipmentId).Select(x => x.ArrivalDate).FirstOrDefault(),
                 InitialQtyKg = l.InitialQtyKg,
                 ReservedQtyKg = l.ReservedQtyKg,
+                RequiresTreatment = Db.Products.Where(p => p.Id == l.ProductId)
+                                      .Select(p => p.RequiresTreatment).FirstOrDefault(),
+                ReadyNowKg = l.TreatmentReadyQtyKg,
+                UnderTreatmentKg = l.UnderTreatmentQtyKg,
                 // §B64: AvailableQtyKg خاصية محسوبة غير مخزّنة — لا تُترجم في استعلام خادمي؛
-                // يُستبدل بالتعبير القابل للترجمة (يطرح العمودين المخزّنين).
-                RemainingKg = l.InStockQtyKg - l.ReservedQtyKg
+                // يُستبدل بالتعبير القابل للترجمة (يطرح الأعمدة المخزّنة).
+                RemainingKg = l.InStockQtyKg - l.ReservedQtyKg - l.UnderTreatmentQtyKg
             })
             .Where(l => l.RemainingKg > 0)
             .ToList();
+
+        // §المعالجة والتعقيم: «المتوقع جاهزيته حتى تاريخ الخطة» يُحسب في الذاكرة —
+        // تجميع المعالجات لكل دفعة لا يُترجم داخل الاستعلام أعلاه.
+        var ids = rows.Where(r => r.RequiresTreatment).Select(r => r.LotId).ToList();
+        if (ids.Count > 0)
+        {
+            var end = forDate?.Date.AddDays(1).AddTicks(-1);
+            var maturing = Db.RawTreatments.AsNoTracking()
+                .Where(t => ids.Contains(t.LotId) && t.Status == TreatmentStatuses.InProgress)
+                .Where(t => end == null || t.ExpectedReadyAt <= end)
+                .GroupBy(t => t.LotId)
+                .Select(g => new { LotId = g.Key, Kg = g.Sum(x => x.QtyKg - x.ReleasedQtyKg - x.RejectedQtyKg) })
+                .ToDictionary(x => x.LotId, x => x.Kg);
+
+            foreach (var r in rows)
+            {
+                if (!r.RequiresTreatment)
+                {
+                    // الصنف الذي لا يشترط معالجة: المتاح كما كان تماماً (قرار س3)
+                    r.AvailableForDateKg = r.RemainingKg;
+                    continue;
+                }
+                r.ExpectedReadyByDateKg = maturing.TryGetValue(r.LotId, out var m) ? Math.Max(0, m) : 0;
+                r.AvailableForDateKg = Math.Max(0,
+                    r.ReadyNowKg + r.ExpectedReadyByDateKg - r.ReservedQtyKg);
+            }
+        }
+        else
+        {
+            foreach (var r in rows) r.AvailableForDateKg = r.RemainingKg;
+        }
+        return rows;
     }
 
     /// <summary>§B68: الأصناف القابلة للتخطيط من دفعة محددة — يُستبعد كل صنف نفذ رصيده منها.
@@ -685,7 +804,8 @@ public class PlanningService : ServiceBase, IPlanningService
             var s = row.s;
             double committed = (planLiveByLot.TryGetValue(l.Id, out var pl) ? pl : 0)
                              + (standaloneLiveByLot.TryGetValue(l.Id, out var so) ? so : 0);
-            double remaining = Math.Max(0, l.InStockQtyKg - committed);
+            // §المعالجة والتعقيم (الموضع 10): الدوّار لا يقترح خاماً تحت المعالجة
+            double remaining = Math.Max(0, l.InStockQtyKg - l.UnderTreatmentQtyKg - committed);
             if (remaining <= 0.01) continue; // مستنفَدة بالخطط/الأوامر الحية — لا تدخل الدوّار
             var allowed = AllowedFor(l.Id);
             if (allowed.Count == 0)

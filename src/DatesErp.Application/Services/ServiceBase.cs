@@ -191,7 +191,41 @@ public abstract class ServiceBase
                   ?? throw new DomainException("الدفعة غير موجودة.");
         if (lot.InStockQtyKg - qtyKg < -0.001)
             throw new DomainException($"الكمية أكبر من رصيد الدفعة {lot.LotCode}.\nالمتاح: {lot.InStockQtyKg:N1} كجم", "INSUFFICIENT_LOT");
+
+        // §المعالجة والتعقيم — **شبكة الأمان الأخيرة** (الموضع 12 في جرد AvailableQtyKg).
+        // كل مسارات الصرف تمر من هنا، فحتى لو التفّ مسار جديد على حراس التخطيط
+        // لا يستطيع استهلاك خام تحت المعالجة. يُفحص **بعد** حارس الرصيد أعلاه
+        // كي تبقى رسالة «الرصيد لا يكفي» هي الأدق حين يكون النقص نقص رصيد فعلاً.
+        GuardTreatedStock(lot, qtyKg);
+
         lot.InStockQtyKg -= qtyKg;
         lot.ProducedQtyKg += qtyKg;
+    }
+
+    /// <summary>
+    /// §المعالجة والتعقيم — يمنع صرف كمية لم تكتمل معالجتها.
+    ///
+    /// **لا يُطبَّق إلا على صنف عليه علم <c>RequiresTreatment</c>** (قرار المستخدم س3):
+    /// التمور المجففة وغيرها لا تحتاج تعقيماً، والإلزام الشامل كان سيعطّل خطوطاً
+    /// لا علاقة لها بالموضوع.
+    ///
+    /// المتاح للصرف = <c>TreatmentReadyQtyKg</c> − ما استُهلك منه سابقاً. ويُشتق
+    /// المستهلك من <c>ProducedQtyKg</c> بدل عمود جديد، فلا مصدر حقيقة ثانٍ يتناقض.
+    /// </summary>
+    protected void GuardTreatedStock(Lot lot, double qtyKg)
+    {
+        bool requires = Db.Products.AsNoTracking()
+            .Where(p => p.Id == lot.ProductId)
+            .Select(p => p.RequiresTreatment).FirstOrDefault();
+        if (!requires) return;
+
+        double readyLeft = lot.TreatmentReadyQtyKg - lot.ProducedQtyKg;
+        if (qtyKg <= readyLeft + 0.001) return;
+
+        throw new DomainException(
+            $"⛔ لا يمكن صرف {qtyKg:N1} كجم من الدفعة {lot.LotCode}: لم تكتمل معالجتها.\n"
+            + $"الجاهز للإنتاج: {Math.Max(0, readyLeft):N1} كجم — تحت المعالجة: {lot.UnderTreatmentQtyKg:N1} كجم.\n"
+            + "أكمل المعالجة وأفرج عن الكمية من شاشة «معالجة وتعقيم الخام» أولاً.",
+            "TREATMENT_INCOMPLETE");
     }
 }
