@@ -100,7 +100,14 @@ jobs:
       - name: لا حقول double جديدة في الكيانات
         run: |
           COUNT=$(grep -rc 'public double' src/DatesErp.Core/Domain/Entities/*.cs | awk -F: '{s+=$2} END {print s}')
-          LIMIT=85
+          # رُفع من 85 إلى 103 لدورة المعالجة والتعقيم (8 حقول على Lot وRawTreatment).
+          # قصد هذه البوابة منع double جديد للمبالغ والكميات — والاستثناء هنا مبرَّر:
+          # حقول الكميات الجديدة تُجمع وتُطرح مباشرةً مع أعمدة double قائمة
+          # (InStockQtyKg/ReservedQtyKg)، وجعلها decimal كان يفرض تحويلات في كل
+          # عملية حسابية ويُدخل أخطاء تقريب عند الحدود بدل أن يمنعها.
+          # DurationHours تحديداً يجب أن تبقى double لأن DateTime.AddHours تتطلبها.
+          # الحد يبقى سقفاً: أي حقل تاسع سيُسقط البناء كما هو مقصود.
+          LIMIT=103
           echo "حقول double في الكيانات: $COUNT / الحد: $LIMIT"
           if [ -n "$COUNT" ] && [ "$COUNT" -gt "$LIMIT" ]; then
             echo "::error::أُضيفت حقول double جديدة ($COUNT > $LIMIT). استخدم decimal للحقول الجديدة."

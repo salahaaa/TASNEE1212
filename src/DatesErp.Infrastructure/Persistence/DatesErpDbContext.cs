@@ -37,6 +37,10 @@ public class DatesErpDbContext : DbContext
     public DbSet<ShipmentItem> ShipmentItems => Set<ShipmentItem>();
     public DbSet<Lot> Lots => Set<Lot>();
 
+    // ── المعالجة والتعقيم ──
+    public DbSet<RawTreatment> RawTreatments => Set<RawTreatment>();
+    public DbSet<TreatmentType> TreatmentTypes => Set<TreatmentType>();
+
     // ── التخطيط والإنتاج ──
     public DbSet<ProductionPlan> ProductionPlans => Set<ProductionPlan>();
     public DbSet<ProductionPlanItem> ProductionPlanItems => Set<ProductionPlanItem>();
@@ -157,6 +161,19 @@ public class DatesErpDbContext : DbContext
             .HasMany<WorkflowTaskHistory>().WithOne(h => h.Task).HasForeignKey(h => h.TaskId)
             .OnDelete(DeleteBehavior.Cascade);
         b.Entity<WorkflowTaskHistory>().HasIndex(h => h.TaskId);
+
+        // ── المعالجة والتعقيم ──
+        b.Entity<RawTreatment>().HasIndex(t => t.TreatmentNo).IsUnique();
+        // فهرس «المتاح حسب تاريخ الإنتاج»: التخطيط يجمع المعالجات الجارية
+        // بـ ExpectedReadyAt <= D لكل دفعة — هذا مسار الاستعلام الساخن.
+        b.Entity<RawTreatment>().HasIndex(t => new { t.LotId, t.Status });
+        b.Entity<RawTreatment>().HasIndex(t => new { t.Status, t.ExpectedReadyAt });
+        b.Entity<TreatmentType>().HasIndex(t => t.TypeCode).IsUnique();
+        // محسوبة، لا تُخزَّن — تصريح واضح رغم أن EF يتجاهل ما لا setter له
+        b.Entity<RawTreatment>().Ignore(t => t.RemainingQtyKg);
+        b.Entity<RawTreatment>().Ignore(t => t.IsReadyByTime);
+        b.Entity<RawTreatment>().Ignore(t => t.IsOverdue);
+        b.Entity<Lot>().Ignore(l => l.AvailableQtyKg);
 
         // ── علاقات الاستلام ──
         b.Entity<Shipment>().HasMany(s => s.Items).WithOne().HasForeignKey(i => i.ShipmentId).OnDelete(DeleteBehavior.Cascade);

@@ -91,6 +91,15 @@ public class Product : AuditableEntity
     public double? YieldFactor { get; set; } // §B85/H3: معامل الإنتاجية (خارج/داخل — ماء التشغيل يجعله > 1) — فارغ = غير معرَّف فلا يُحتسب انحراف
     public double ReorderLevel { get; set; }
     public double DefaultCost { get; set; }
+
+    /// <summary>
+    /// §المعالجة والتعقيم — هل يشترط هذا الصنف معالجة قبل دخوله الإنتاج؟ (قرار المستخدم س3)
+    /// **الافتراضي false**: الإلزام الشامل كان سيعطّل خطوط إنتاج لا علاقة لها بالتعقيم
+    /// (التمور المجففة مثلاً)، ويدفع الناس إلى الالتفاف عليه — وذلك أسوأ من غياب الضابط.
+    /// يُفعَّل لكل صنف من شاشة الأصناف بصفر تعديل برمجي.
+    /// </summary>
+    public bool RequiresTreatment { get; set; }
+
     public bool IsActive { get; set; } = true;
     public string Notes { get; set; }
     /// <summary>

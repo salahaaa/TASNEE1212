@@ -83,7 +83,47 @@ public static class SchemaMigrator
         // §B87/M6: توحيد العميل الفارغ — الصفر القديم يعني «بلا عميل» فيُرحَّل إلى NULL
         NullifyZeroCustomers(db, report);
 
+        // §المعالجة والتعقيم — الدفعات القائمة تُعتبر جاهزة (منع توقف الإنتاج عند الترقية)
+        BackfillTreatmentReadiness(db, report);
+
         return report;
+    }
+
+    /// <summary>
+    /// §المعالجة والتعقيم — ترحيل صريح ومسجَّل للمخزون القائم (قرار المستخدم س2).
+    ///
+    /// **لماذا هذا إلزامي؟** الدفعات الموجودة في القاعدة لم تمر بدورة معالجة قط، لأن
+    /// الدورة لم تكن موجودة. لو تُركت بـ TreatmentReadyQtyKg = 0 ثم فُعّل اشتراط
+    /// المعالجة (المرحلة 3)، لتوقف الإنتاج كله لحظة الترقية على مخزون قائم ومدفوع ثمنه.
+    /// هذا فخ ترقية حقيقي، نظير ما عولج في طبقة الصلاحيات.
+    ///
+    /// **آمن للتكرار (idempotent):** يعالج الدفعات التي لم تُرحَّل ولم تدخل معالجة قط
+    /// فقط. لا يلمس صفاً بدأت عليه دورة حقيقية، فلا يمحو عمل النظام بعد التشغيل.
+    /// </summary>
+    private static void BackfillTreatmentReadiness(DatesErpDbContext db, List<string> report)
+    {
+        try
+        {
+            // الشرط الثلاثي هو ضمان عدم اللمس: جاهز = 0، وتحت المعالجة = 0،
+            // ولا توجد أي عملية معالجة مسجّلة على الدفعة.
+            var treated = db.RawTreatments.Select(t => t.LotId).Distinct().ToHashSet();
+            var pending = db.Lots
+                .Where(l => l.TreatmentReadyQtyKg <= 0 && l.UnderTreatmentQtyKg <= 0 && l.InStockQtyKg > 0)
+                .ToList()
+                .Where(l => !treated.Contains(l.Id))
+                .ToList();
+
+            if (pending.Count == 0) return;
+            foreach (var lot in pending) lot.TreatmentReadyQtyKg = lot.InStockQtyKg;
+            db.SaveChanges();
+            report.Add($"ترحيل المعالجة: اعتُبرت {pending.Count} دفعة قائمة جاهزة للإنتاج "
+                       + "(مخزون سابق لتفعيل دورة المعالجة — لم يُمسّ أي رصيد).");
+        }
+        catch (Exception ex)
+        {
+            // الترحيل لا يُسقط الإقلاع: النظام يعمل بسلوكه السابق ويُبلَّغ بالسبب
+            report.Add("تعذّر ترحيل جاهزية المعالجة: " + ex.Message);
+        }
     }
 
     /// <summary>

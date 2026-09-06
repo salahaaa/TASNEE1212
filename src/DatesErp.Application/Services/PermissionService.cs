@@ -47,6 +47,15 @@ public class PermissionService
         ("ManagePermissions", "إدارة الصلاحيات", true)
     };
 
+    // §المعالجة والتعقيم — تعيين العمليات العامة على مورد «treatment»:
+    //   View    = عرض المعالجات والتقارير
+    //   Create  = بدء معالجة (نقل الكمية إلى مستودع المعالجة)
+    //   Approve = الإفراج بعد اكتمال المدة (كلي أو جزئي)
+    //   Cancel  = الرفض أو إلغاء بدء خاطئ
+    // لم تُضف عمليات خاصة (Start/Release/Reject) عمداً: مصفوفة العمليات مشتركة بين
+    // كل الموارد، فإضافة ثلاث عمليات لمورد واحد تضخّم شاشة الصلاحيات لأربعة وعشرين
+    // مورداً بأعمدة لا معنى لها لأغلبها.
+
     // ═══ التهيئة: بذر الكتالوج + ترحيل صلاحيات الأدوار القديمة إلى النموذج الجديد ═══
     public void EnsureCatalog()
     {
@@ -124,10 +133,13 @@ public class PermissionService
     {
         // §3: «tasks» انضمت للقائمة — كل دور يجب أن يرى مهامه هو، وإلا كانت طبقة
         // التوجيه كلها محجوبة عن مستخدمي القاعدة المُرقّاة. «ViewAll» الإشرافية لا تُمنح هنا.
+        // §المعالجة والتعقيم: «treatment» مورد جديد — يُمنح «عرض» لكل دور نشط عند الترقية.
+        // العمليات الفعلية (بدء/إفراج/رفض) لا تُمنح تلقائياً: العرض لا يضر، والتنفيذ قرار إدارة.
         string[] newlyGated =
         {
             PermissionModules.Products, PermissionModules.Cartons,
-            PermissionModules.Employees, PermissionModules.Tasks
+            PermissionModules.Employees, PermissionModules.Tasks,
+            PermissionModules.Treatment
         };
         var viewOp = _db.PermissionOperations.FirstOrDefault(o => o.Code == "View");
         if (viewOp == null) return;

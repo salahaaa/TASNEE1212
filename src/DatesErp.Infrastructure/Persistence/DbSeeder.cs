@@ -102,6 +102,15 @@ public static class DbSeeder
         db.ProductionLines.Add(new ProductionLine { LineCode = "L1", LineNameAr = "خط الإنتاج الأول", CapacityPerShift = 5000 });
         if (!db.Warehouses.Any(w => w.WarehouseCode == "WPK"))
             db.Warehouses.Add(new Warehouse { WarehouseCode = "WPK", WarehouseNameAr = "مخزن الكرتون والتغليف", WarehouseType = "Pack" });
+        // §المعالجة والتعقيم — مستودع مستقل يفصل ما تحت المعالجة عن الخام المتاح.
+        // بنمط «إن لم يوجد» كسابقه: البذر يمر على قواعد قائمة فلا يكرر الصف.
+        if (!db.Warehouses.Any(w => w.WarehouseCode == "WTRT"))
+            db.Warehouses.Add(new Warehouse { WarehouseCode = "WTRT", WarehouseNameAr = "مستودع المعالجة والتعقيم", WarehouseType = "Treatment" });
+        if (!db.TreatmentTypes.Any())
+            db.TreatmentTypes.AddRange(
+                new TreatmentType { TypeCode = "TRT-HEAT", TypeNameAr = "تعقيم حراري", DefaultDurationHours = 6, RequiresQualityCheck = true },
+                new TreatmentType { TypeCode = "TRT-FRZ", TypeNameAr = "تجميد", DefaultDurationHours = 168, RequiresQualityCheck = false },
+                new TreatmentType { TypeCode = "TRT-FUM", TypeNameAr = "تبخير", DefaultDurationHours = 72, RequiresQualityCheck = true });
         var bk = db.PackagingTypes.FirstOrDefault(x => x.PackageCode == "BK20");
         var basketEmpty = db.Products.FirstOrDefault(x => x.ProductCode == "004-002");
         if (bk != null && basketEmpty != null) basketEmpty.SourcePackagingTypeId = bk.Id;

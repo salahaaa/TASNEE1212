@@ -51,6 +51,13 @@ public static class PermissionModules
     /// <summary>§3 — «مهامي» ولوحة المهام: مورد قائم بذاته له عملياته.</summary>
     public const string Tasks = "tasks";
 
+    /// <summary>
+    /// §المعالجة والتعقيم — مورد مستقل بعملياته (Start / Release / Reject / View).
+    /// **موجَّه بالقدرة لا بالمسمى الوظيفي**: من يملك القدرة ينفّذها أياً كان مسماه،
+    /// وتُضاف الوظائف أو تُدمج من شاشة الصلاحيات بصفر تعديل برمجي.
+    /// </summary>
+    public const string Treatment = "treatment";
+
     /// <summary>لوحة المؤشرات — مفتوحة للجميع بعد الدخول، فلا تخضع للبوابة.</summary>
     public const string Dashboard = "dashboard";
 
@@ -64,6 +71,7 @@ public static class PermissionModules
         (Inventory, "أرصدة المخزون والحركات", "المخازن"),
         (Cartons, "الكرتون الفارغ (تولّد/عدّ/بيع)", "المخازن"),
         (Lots, "الدفعات وأرصدة الخام", "المخازن"),
+        (Treatment, "معالجة وتعقيم الخام", "المخازن"),
         (Materials, "المواد المساعدة", "المخازن"),
 
         (Products, "الأصناف والعبوات والطاقة", "البيانات الأساسية"),
