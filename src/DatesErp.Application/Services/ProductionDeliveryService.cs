@@ -82,6 +82,7 @@ public class ProductionDeliveryService : ServiceBase, IProductionDeliveryService
                 Notes = notes
             };
 
+            var takenPerLine = new Dictionary<DeliverySourceLine, double>();
             foreach (var it in items)
             {
                 // §نظام الوحدات: التسليم للمنتجات التامة فقط (002)
@@ -90,8 +91,22 @@ public class ProductionDeliveryService : ServiceBase, IProductionDeliveryService
                     throw new DomainException($"كمية البند للصنف «{ProdName(it.ProductId)}» يجب أن تكون أكبر من صفر.");
 
                 // §مطابقة سطر المصدر (صنف + دفعة + عميل)
-                var line = srcLines.FirstOrDefault(l => l.ProductId == it.ProductId
-                    && l.LotId == it.LotId && l.CustomerId == (it.CustomerId ?? l.CustomerId));
+                // §تعدد العملاء: حين يُترك عميل البند فارغاً كان الشرط l.CustomerId == (it.CustomerId ?? l.CustomerId)
+                // يتحقق لكل السطور، فيُلتقط أول سطر بالصدفة ويُقيَّد التام لعميل غير صاحبه.
+                // فإن تعددت السطور المطابقة صنفاً ودفعةً، العميل إلزامي صريح.
+                var candidates = srcLines.Where(l => l.ProductId == it.ProductId && l.LotId == it.LotId).ToList();
+                DeliverySourceLine line;
+                if (it.CustomerId != null)
+                    line = candidates.FirstOrDefault(l => l.CustomerId == it.CustomerId);
+                else if (candidates.Count > 1)
+                    throw new DomainException(
+                        $"⛔ الصنف «{ProdName(it.ProductId)}»" +
+                        (it.LotId != null ? $" من الدفعة «{LotCode(it.LotId)}»" : "") +
+                        $" مشترك بين {candidates.Count} عملاء في {DeliverySources.ToArabic(sourceType)} — حدد عميل البند صراحةً.\n" +
+                        "العملاء: " + string.Join(" · ", candidates.Select(c => c.CustomerName ?? "بلا عميل")),
+                        "AMBIGUOUS_CUSTOMER");
+                else
+                    line = candidates.FirstOrDefault();
                 if (line == null)
                     throw new DomainException(
                         $"لا يوجد سطر مطابق في {DeliverySources.ToArabic(sourceType)} للصنف «{ProdName(it.ProductId)}»" +
@@ -99,11 +114,16 @@ public class ProductionDeliveryService : ServiceBase, IProductionDeliveryService
                         "NO_SOURCE_LINE");
 
                 // §سقف المصدر: لا تسليم فوق المتبقي (المقبول/المنتَج ناقص ما سُلِّم سابقاً)
-                if (it.QtyKg > line.RemainingQtyKg + 0.01)
+                // RemainingQtyKg محسوب مرة واحدة قبل الحلقة من المحفوظ، فبندان في نفس المستند
+                // على سطر واحد كانا يُقاسان كلاهما على المتبقي الكامل ويتجاوزانه معاً — يُجمَّع محلياً.
+                takenPerLine.TryGetValue(line, out double takenBefore);
+                if (takenBefore + it.QtyKg > line.RemainingQtyKg + 0.01)
                     throw new DomainException(
                         $"⛔ كمية البند ({it.QtyKg:N1} كجم) تتجاوز المتبقي القابل للتسليم ({line.RemainingQtyKg:N1} كجم) " +
-                        $"للصنف «{line.ProductName}» في {DeliverySources.ToArabic(sourceType)}.",
+                        $"للصنف «{line.ProductName}» في {DeliverySources.ToArabic(sourceType)}." +
+                        (takenBefore > 0 ? $"\nمأخوذ في بنود أخرى من هذا المستند: {takenBefore:N1} كجم." : ""),
                         "OVER_SOURCE");
+                takenPerLine[line] = takenBefore + it.QtyKg;
 
                 // §السقف الفيزيائي الموحد: كل المصادر معاً لا تتجاوز إنتاج الأمر (منع ازدواج محضر+خطة)
                 if (line.OrderId is int lineOrderId)
