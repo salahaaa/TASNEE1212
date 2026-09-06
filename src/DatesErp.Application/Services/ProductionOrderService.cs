@@ -719,6 +719,15 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
                 $"لا يمكن إلغاء أمر حالته «{DocStatuses.ToArabic(order.Status)}».\n" +
                 "بعد بدء الإنتاج لا يُلغى الأمر — استخدم الإقفال أو الإرجاع حسب الصلاحيات، مع بقاء السجل كاملاً للتدقيق.");
 
+        // §إصلاح: حارس الحالة وحده لا يكفي. إقفال يوم إنتاج جزئي يستهلك خاماً فعلياً
+        // (ConsumeLot) لكنه لا يغيّر حالة الأمر إلى Completed إلا باكتمال كل البنود —
+        // فيبقى Scheduled ويمرّ من الحارس أعلاه، ويُلغى أمر استُهلك خامه بالفعل.
+        // الفحص على وجود التنفيذ نفسه، كما في UnapproveOrder وDeleteOrder.
+        if (Db.ProductionExecutions.Any(e => e.OrderId == orderId))
+            return OpResult.Fail(
+                "لا يمكن إلغاء أمر له جلسات تنفيذ مسجّلة — استُهلك خامه فعلياً.\n" +
+                "استخدم الإقفال بتسوية موثقة ليبقى أثر الاستهلاك في السجل.");
+
         return RunOp(() =>
         {
             if (order.IsApproved) ReverseConsumption(order);
@@ -732,20 +741,26 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
         });
     }
 
-    /// <summary>عكس صرف الخام والمواد (لإلغاء الاعتماد/الإلغاء).</summary>
+    /// <summary>عكس صرف المواد المساعدة (لإلغاء الاعتماد/الإلغاء).</summary>
+    /// <remarks>
+    /// §إصلاح حرج — خلق مخزون خام من العدم:
+    /// كانت الدالة تُعيد <c>PlannedQtyKg</c> إلى رصيد الدفعة ومخزن الخام عند كل إلغاء،
+    /// بافتراض أن الاعتماد خصم الخام. لكن <see cref="ApproveOrder"/> **لا يخصم الخام
+    /// إطلاقاً** (قاعدة توازن الإنتاج: الخام يُصرف عند الإقفال بالمستهلك الفعلي عبر
+    /// ConsumeLot). فكان العكس يضيف كمية لم تُخصم قط:
+    ///   • أمر معتمد بلا تنفيذ ثم إلغاء ⟵ رصيد الدفعة يرتفع بالمخطط كاملاً من العدم.
+    ///   • أمر أُقفل يومه جزئياً (حالته تبقى Scheduled فلا يمنعه حارس CancelOrder)
+    ///     ثم إلغاء ⟵ يُضاف المخطط فوق ما استُهلك فعلاً، ويُحذف قيد الاستهلاك الحقيقي
+    ///     بـ RemoveRange فيضيع أثره من دفتر الحركة.
+    /// كرر ذلك على الأمر نفسه وتتضاعف الكمية بلا سقف.
+    ///
+    /// الصحيح: لا شيء يُعكس على الخام هنا لأن لا شيء صُرف. عكس الاستهلاك الفعلي — إن
+    /// وُجد — من اختصاص مسار عكس الإقفال في ExecutionService حيث الكمية المستهلكة معروفة.
+    /// المواد المساعدة تبقى تُعكس: هي فعلاً تُصرف عند الاعتماد.
+    /// </remarks>
     private void ReverseConsumption(ProductionOrder order)
     {
-        var whRaw = WarehouseId("WRM");
         var whAux = WarehouseId("WAUX");
-        foreach (var item in order.Items.Where(i => i.LotId != null))
-        {
-            var lot = Db.Lots.FirstOrDefault(l => l.Id == item.LotId);
-            if (lot != null) { lot.InStockQtyKg += item.PlannedQtyKg; lot.ProducedQtyKg -= item.PlannedQtyKg; }
-            Db.InventoryTransactions.RemoveRange(Db.InventoryTransactions.Where(t =>
-                t.ReferenceDocType == ReferenceDocType.ProductionExecution && t.ReferenceDocNumber == order.DocumentNumber && t.LotId == item.LotId));
-            var bal = Db.StockBalances.FirstOrDefault(b => b.WarehouseId == whRaw && b.LotId == item.LotId);
-            if (bal != null) bal.QtyKg += item.PlannedQtyKg;
-        }
         foreach (var mat in Db.ProductionOrderMaterials.Where(m => m.OrderId == order.Id && m.ActualIssuedQty > 0))
         {
             Db.InventoryTransactions.RemoveRange(Db.InventoryTransactions.Where(t =>
