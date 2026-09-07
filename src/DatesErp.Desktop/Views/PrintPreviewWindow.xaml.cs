@@ -27,16 +27,12 @@ public partial class PrintPreviewWindow : Window
         if (_pdfExporter != null) PdfBtn.Visibility = Visibility.Visible;
         Loaded += (_, _) =>
         {
-            // §إصلاح جذري (الصفحات الفارغة): كان هنا ColumnWidth = 1000 يدهس ضبطَ بُناة
-            // النماذج (double.MaxValue = عمود واحد يملأ الصفحة) ولا يُعاد أبداً قبل الطباعة.
-            // النموذج الرأسي عرضه 794 وهوامشه 80 ← 714 متاح فقط، فالعمود 1000 أعرض من
-            // الصفحة ويعجز المُرقِّم عن رصفه ← صفحات بيضاء. عمودٌ واحد هو الصواب دائماً.
-            // §B106.1 — تصحيح: كان double.MaxValue فانهار الرصف إلى عمود بعرض حرف واحد
-            // (النص العربي يتكسّر رأسياً وتتضاعف الصفحات). double.MaxValue يصلح لعارض
-            // التمرير الذي يقصّه إلى عرض النافذة، أما FlowDocumentPageViewer فيحترم
-            // المقاس حرفياً فيأخذه على أنه عرض لا نهائي.
-            // الصواب: عمود واحد بعرض منطقة النص الفعلية = عرض الصفحة ناقص الهوامش.
-            _doc.ColumnWidth = UsableWidth(_doc);
+            // §B106.2 — رجوع للسلوك الأصلي المعروف (B105) بعد فشل تجربتين:
+            //   • ColumnWidth = double.MaxValue  -> انهار الرصف مع عارض الصفحات
+            //   • FlowDocumentPageViewer         -> لا يحترم PageWidth بل يرقّم على
+            //     مقاس منفذ العرض، فيصطدم بأي ColumnWidth مفروض ويتكسّر النص رأسياً.
+            // لا يُلمس عرضُ المعاينة مجدداً قبل اختبار ترقيم آلي يثبت النتيجة.
+            _doc.ColumnWidth = 1000;
             Viewer.Document = _doc;
             ApplyZoom(ZoomSlider.Value);
         };
@@ -94,18 +90,6 @@ public partial class PrintPreviewWindow : Window
             MessageBox.Show(this, $"تعذر تصدير PDF:\n{ex.Message}", "تصدير PDF",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-    }
-
-    /// <summary>عرض منطقة النص داخل الصفحة = PageWidth ناقص الهوامش (بحدٍّ أدنى آمن).</summary>
-    private static double UsableWidth(FlowDocument d)
-    {
-        double w = d.PageWidth;
-        if (double.IsNaN(w) || double.IsInfinity(w) || w <= 0) w = 794; // A4 عمودي
-        var pad = d.PagePadding;
-        double l = double.IsNaN(pad.Left) ? 0 : pad.Left;
-        double r = double.IsNaN(pad.Right) ? 0 : pad.Right;
-        double usable = w - l - r;
-        return usable > 100 ? usable : w;
     }
 
     // ════ التكبير/التصغير ════

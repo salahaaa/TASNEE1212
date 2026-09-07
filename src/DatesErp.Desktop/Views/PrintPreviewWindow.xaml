@@ -26,12 +26,12 @@
                            VerticalAlignment="Center" Margin="14,0,0,0"/>
             </StackPanel>
         </Border>
-        <!-- §صفحة المعاينة — FlowDocumentPageViewer: يعرض صفحات A4 حقيقية بمقاس المستند
-             (كان FlowDocumentScrollViewer يتجاهل PageWidth/PageHeight ويعرض شريطاً متصلاً
-             يُمطّ النموذج الرأسي داخل نافذة عريضة، بلا حدود صفحة ولا فواصل). -->
+        <!-- §صفحة المعاينة -->
         <Border Background="#8EA2B5" Padding="18">
             <Border Background="White" BorderBrush="#5C768D" BorderThickness="1" Padding="26" ClipToBounds="False">
-                <FlowDocumentPageViewer x:Name="Viewer" Background="White"/>
+                <FlowDocumentScrollViewer x:Name="Viewer" Background="White"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Auto"/>
             </Border>
         </Border>
     </DockPanel>
