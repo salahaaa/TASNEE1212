@@ -27,7 +27,11 @@ public partial class PrintPreviewWindow : Window
         if (_pdfExporter != null) PdfBtn.Visibility = Visibility.Visible;
         Loaded += (_, _) =>
         {
-            _doc.ColumnWidth = 1000;
+            // §إصلاح جذري (الصفحات الفارغة): كان هنا ColumnWidth = 1000 يدهس ضبطَ بُناة
+            // النماذج (double.MaxValue = عمود واحد يملأ الصفحة) ولا يُعاد أبداً قبل الطباعة.
+            // النموذج الرأسي عرضه 794 وهوامشه 80 ← 714 متاح فقط، فالعمود 1000 أعرض من
+            // الصفحة ويعجز المُرقِّم عن رصفه ← صفحات بيضاء. عمودٌ واحد هو الصواب دائماً.
+            _doc.ColumnWidth = double.MaxValue;
             Viewer.Document = _doc;
             ApplyZoom(ZoomSlider.Value);
         };
@@ -37,8 +41,31 @@ public partial class PrintPreviewWindow : Window
     private void Print_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new PrintDialog();
-        if (dlg.ShowDialog() == true)
-            dlg.PrintDocument(((IDocumentPaginatorSource)_doc).DocumentPaginator, PreviewTitle.Text);
+        if (dlg.ShowDialog() != true) return;
+
+        // §إصلاح: اتجاه الورق يتبع أبعاد النموذج نفسه — كان النموذج الأفقي (1122×794)
+        // يُرسل إلى ورقة رأسية فيُقصّ أو يُخرج صفحات فارغة.
+        try
+        {
+            bool landscape = _doc.PageWidth > _doc.PageHeight;
+            var ticket = dlg.PrintTicket ?? new System.Printing.PrintTicket();
+            ticket.PageOrientation = landscape
+                ? System.Printing.PageOrientation.Landscape
+                : System.Printing.PageOrientation.Portrait;
+            dlg.PrintTicket = ticket;
+        }
+        catch { /* بعض برامج التشغيل ترفض ضبط التذكرة — تُترك على الافتراضي */ }
+
+        // §إصلاح: تثبيت مقاس الصفحة على أبعاد المستند قبل الترقيم (لا مقاس العارض)
+        var paginator = ((IDocumentPaginatorSource)_doc).DocumentPaginator;
+        try
+        {
+            if (_doc.PageWidth > 0 && _doc.PageHeight > 0)
+                paginator.PageSize = new Size(_doc.PageWidth, _doc.PageHeight);
+        }
+        catch { }
+
+        dlg.PrintDocument(paginator, PreviewTitle.Text);
     }
 
     // ════ تصدير PDF عبر المُصدِّر المخصص ════

@@ -259,7 +259,10 @@ public class NewOrderPanel : UserControl
     private void ShowCapacity()
     {
         if (_date.SelectedDate == null) return;
-        var selected = _rows.Where(r => r.IsChecked && r.Cartons > 0).ToList();
+        // §إصلاح: كان الشرط (Cartons > 0) وحده — فالصف المؤشَّر بكمية بالكيلو دون كراتين
+        // يسقط صامتاً هنا وفي الحفظ، فيُحفظ الأمر بلا بنود ثم يرفضه الاعتماد بـ«أمر بدون بنود».
+        // وُحِّد الشرط مع شرط الحفظ أدناه: (QtyKg > 0 || Cartons > 0).
+        var selected = _rows.Where(r => r.IsChecked && (r.Cartons > 0 || r.QtyKg > 0)).ToList();
         if (selected.Count == 0) { _capacityInfo.Text = "علّم بنداً واحداً على الأقل لعرض حساب الطاقة."; return; }
         try
         {

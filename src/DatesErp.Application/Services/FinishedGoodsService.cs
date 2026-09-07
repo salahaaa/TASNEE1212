@@ -108,6 +108,13 @@ public class FinishedGoodsService : ServiceBase, IFinishedGoodsService
                 var orderItem = order.Items.FirstOrDefault(i => i.ProductId == it.ProductId);
                 if (orderItem == null) throw new DomainException("الصنف غير موجود في أمر الإنتاج.");
 
+                // §إصلاح (تسليم العميل): المسار المباشر كان يترك effCust = null، فتدخل البضاعة
+                // مخزنَ التام بلا هوية عميل. وشاشة «التسليم للعميل» تبحث بـ
+                // (WarehouseId == WFG && CustomerId == العميل) فلا تجد شيئاً — فيظهر رصيد صفر
+                // ولا تُعرض أصناف ولا كميات (الاختيار فيها بالنقر المزدوج على جدول الرصيد).
+                // الهوية تُشتق الآن من ملكية سطر الأمر ثم من عميل الأمر.
+                effCust = orderItem.CustomerId ?? order.CustomerId;
+
                 // §تتبع الصنف: الدفعة المرتبطة بالتسليم يجب أن تتطابق مع دفعة بند الأمر (لا استبدال هوية)
                 if (it.LotId is int fgLotId)
                 {

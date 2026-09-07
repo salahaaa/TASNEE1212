@@ -6,5 +6,5 @@ namespace DatesErp.Desktop.Services;
 /// </summary>
 public static class BuildInfo
 {
-    public const string Stamp = "2026-09-07 B105";
+    public const string Stamp = "2026-09-07 B106";
 }
