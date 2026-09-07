@@ -248,7 +248,15 @@ public class RawTreatmentPhase1Tests
         var db = scope.ServiceProvider.GetRequiredService<DatesErpDbContext>();
         // مستودع واحد لا اثنان، وأنواع المعالجة لم تتكرر
         Assert.Single(db.Warehouses.Where(w => w.WarehouseCode == "WTRT").ToList());
-        Assert.Equal(3, db.TreatmentTypes.Count());
+
+        // §B106 — كان: Assert.Equal(3, Count()). عددٌ سحري يقيس «عدم التكرار» بالإجمالي،
+        // فينكسر كلما أُضيف نوع مشروع (أُضيفت أنواع درجات الإصابة: خفيفة/متوسطة/شديدة).
+        // العدد ليس هو الثابت المقصود — الثابت هو **ألا يتكرر أي TypeCode**.
+        // نفحصه مباشرةً الآن، فيصمد أمام أي إضافة مستقبلية ويكشف التكرار الحقيقي
+        // الذي كان العدّ السحري سيُخفيه لو أُضيف نوع وحُذف آخر.
+        var codes = db.TreatmentTypes.Select(x => x.TypeCode).ToList();
+        Assert.Equal(codes.Count, codes.Distinct().Count());
+        Assert.NotEmpty(codes);
     }
 
     /// <summary>

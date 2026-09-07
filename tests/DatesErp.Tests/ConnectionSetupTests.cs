@@ -64,10 +64,15 @@ public class ConnectionSetupTests
         // برسالة "تعذر الوصول إلى الخادم" — بل برسالة اتصال حقيقية.
         var tester = new ConnectionTester();
         var r = tester.Test(@".\SQLEXPRESS01", "DateFactory", "Windows");
-        // Named instance: ServerReachable يُفترض true (تجاوز فحص TCP)
+        // Named instance: ServerReachable يُفترض true (تجاوز فحص TCP) — هذا هو المسلك المُختبَر
         Assert.True(r.ServerReachable, "Named Instance يجب أن يتجاوز فحص TCP على 1433");
-        // لكنه سيفشل في الاتصال الفعلي (بلا SQL Server هنا) برسالة حقيقية لا "تعذر الوصول"
-        Assert.False(r.ConnectionOk);
+
+        // §B106 — حُذف Assert.False(r.ConnectionOk).
+        // كان يفترض **غياب SQL Server عن جهاز التشغيل** (كُتب لبيئة لينكس)، فينكسر على
+        // أي جهاز ويندوز فيه SQLEXPRESS01 فعلاً — إذ ينجح الاتصال ويصير ConnectionOk=true.
+        // نجاح الاتصال أو فشله ليس موضوع هذا الاختبار ولا يخضع لسيطرته؛ موضوعه أن
+        // النسخة المسمّاة **لا تسقط في فحص TCP على 1433**. وهذا ما تؤكده الفحوص الباقية:
+        // ServerReachable = true، ولا رسالة «تعذر الوصول إلى الخادم» مهما كانت النتيجة.
         Assert.DoesNotContain("تعذر الوصول إلى الخادم", r.Message);
     }
 
