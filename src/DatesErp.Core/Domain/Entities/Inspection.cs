@@ -85,10 +85,16 @@ public class InspectionResultType : BaseEntity
         _ => null
     };
 
+    // §B106 — أُزيل «منسم» من تسمية درجة «غير مطابق».
+    // كان تناقضاً مع قاعدة المصنع المطبَّقة في البذر نفسه: النوع RT-MONSAM «تمر منسم»
+    // مُعرَّف KindAccepted + IsFinishedGood + EntersInventory — أي **منتج تام مقبول
+    // قابل للبيع والتسليم**، لا مخرجاً ثانوياً ولا غير مطابق. فتسمية الدرجة الرافضة
+    // باسمه كانت توحي لمسؤول الجودة بأن كل منسم مرفوض، وهو عكس التصنيف المعتمد.
+    // (B103 صحّحت الترويسة المولَّدة وتركت هذه التسمية الثابتة — فاكتمل التصحيح هنا.)
     public static string GradeNameAr(string grade) => grade switch
     {
         GradeConforming => "مطابق / سليم",
-        GradeNonConforming => "غير مطابق / منسم",
+        GradeNonConforming => "غير مطابق",
         GradeScrap => "مرفوض",
         _ => grade ?? "—"
     };

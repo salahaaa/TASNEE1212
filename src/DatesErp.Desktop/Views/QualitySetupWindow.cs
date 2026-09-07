@@ -57,7 +57,7 @@ public class QualitySetupWindow : Window
         var rtBy = new CheckBox { Content = "مخرج ثانوي" };
         var rtInv = new CheckBox { Content = "يدخل المخزون", IsChecked = true };
         var rtLoss = new CheckBox { Content = "يُحسب من الفاقد" };
-        var rtScrap = new CheckBox { Content = "مرفوض نهائي / عوادم (وإلا فغير مطابق / منسم)", ToolTip = "§B95 — للمرفوض فقط: يفصل المرفوض النهائي عن غير المطابق القابل للمعالجة في ملخص الدرجات" };
+        var rtScrap = new CheckBox { Content = "مرفوض نهائي / عوادم (وإلا فغير مطابق)", ToolTip = "§B95 — للمرفوض فقط: يفصل المرفوض النهائي عن غير المطابق القابل للمعالجة في ملخص الدرجات" };
         var rtMan = new CheckBox { Content = "إجباري لكل الأصناف" };
         var rtGrid = new DataGrid { Height = 220, IsReadOnly = true, RowHeight = 28, AutoGenerateColumns = false };
         rtGrid.Columns.Add(new DataGridTextColumn { Header = "الكود", Binding = new System.Windows.Data.Binding("Code"), Width = 100 });
