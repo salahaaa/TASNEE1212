@@ -143,3 +143,31 @@ dotnet build DateERP.sln -c Release
 dotnet test tests/DatesErp.Tests/DatesErp.Tests.csproj -c Release --no-build
 ```
 **بعد التحديث يجب أن يظهر في عنوان النافذة: `2026-09-07 B106`**
+
+---
+
+## §7 — إصلاح خط التكامل المستمر (CI) نفسه
+
+عند اعتماد الشجرة تبيّن أن `ci.yml` **ما كان ليعمل حتى لو وُضع في مستودع صحيح** — ثلاثة عيوب بنيوية تؤكد أنه لم يُشغَّل ولا مرة منذ كتابته في B83:
+
+| # | العيب | الأثر | الإصلاح |
+|---|---|---|---|
+| 1 | حزمة B105 وضعته في **`.github/ci.yml`** بدل `.github/workflows/ci.yml` | GitHub لا يراه إطلاقاً — لا وظيفة تُنشأ | نسخة مصححة في `tools/ci/ci.yml` ⚠️ تحتاج نقلة يدوية |
+| 2 | `build-and-test` على **`ubuntu-latest`** بينما `DatesErp.Desktop` هدفه `net8.0-windows` مع `UseWPF` | **البناء يفشل فوراً** — لا يمكن بناء WPF على لينكس | `runs-on: windows-latest` + `shell: bash` للخطوات النصية |
+| 3 | خطوة «اختبارات القبول» داخل وظيفة **لا تُثبّت .NET ولا تبني شيئاً**، ثم تستدعي `--no-build` | فشل حتمي | أُضيف `setup-dotnet` وحُذف `--no-build` |
+
+`AcceptanceRunner` هدفه `net8.0` ويعتمد على `Application`/`Infrastructure` فقط (لا `Desktop`) — فيبقى على لينكس بلا مشكلة.
+
+### ⚠️ خطوة يدوية مطلوبة منك
+صلاحيات التطبيق **لا تسمح بكتابة ملفات `.github/workflows/`** (قيد أمني في GitHub)، فوُضعت النسخة المصححة في **`tools/ci/ci.yml`**.
+لتفعيلها:
+```bash
+mkdir -p .github/workflows
+git mv tools/ci/ci.yml .github/workflows/ci.yml
+git rm .github/ci.yml
+git commit -m "تفعيل CI" && git push
+```
+التفاصيل في `tools/ci/README_تفعيل_CI.md`.
+
+**النتيجة بعد التفعيل:** أول تشغيل حقيقي لـCI في تاريخ المشروع — وأول ترجمة فعلية للكود منذ B83.
+**توقّع فشل أول تشغيل**: سيكشف أخطاء الترجمة المتراكمة منذ B84 دفعةً واحدة بنصوص دقيقة — أرسلها لي وأعالجها.
