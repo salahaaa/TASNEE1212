@@ -68,7 +68,7 @@ public partial class ProductionDeliveryView : UserControl
             .WithSave((_, _) => Save(), "حفظ الأمر كمسودة (F10)")
             .WithCustom("📤 تحرير للمخازن", "ErpApproveButton", (_, _) => Issue(), "تحرير الأمر — مدير الإنتاج")
             .WithCustom("✖ إلغاء الأمر", "ErpDangerButton", (_, _) => Cancel(), "إلغاء أمر لم يبدأ استلامه")
-            .WithSearch((_, _) => RefreshList(), "بحث في أوامر التسليم (F9)")
+            .WithSearch((_, _) => { RefreshList(); RecSearchBox.Focus(); }, "بحث في أوامر التسليم (F9)")
             .WithUndo((_, _) => UndoSmart(), "تراجع: يعيد آخر نسخة محفوظة — لا يحذف أي أمر")
             .WithNavigation((_, _) => Nav(0), (_, _) => Nav(-1), (_, _) => Nav(1), (_, _) => Nav(int.MaxValue))
             .WithList((_, _) => RefreshList(), "عرض كل أوامر التسليم")

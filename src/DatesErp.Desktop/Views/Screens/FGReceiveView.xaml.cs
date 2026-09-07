@@ -64,7 +64,7 @@ public partial class FGReceiveView : UserControl
             .WithNew((_, _) => NewForm(), "سند استلام جديد (F2)")
             .WithSave((_, _) => Save(), "حفظ السند كمسودة (F10)")
             .WithCustom("📤 إصدار السند", "ErpButton", (_, _) => Issue(), "إصدار السند للتنفيذ — لا يمس الأرصدة")
-            .WithSearch((_, _) => RefreshList(), "بحث في سندات الاستلام (F9)")
+            .WithSearch((_, _) => { RefreshList(); RecSearchBox.Focus(); }, "بحث في سندات الاستلام (F9)")
             .WithUndo((_, _) => UndoSmart(), "تراجع: يعيد آخر نسخة محفوظة — لا يحذف أي سند")
             .WithNavigation((_, _) => Nav(0), (_, _) => Nav(-1), (_, _) => Nav(1), (_, _) => Nav(int.MaxValue))
             .WithList((_, _) => RefreshList(), "عرض كل سندات الاستلام")

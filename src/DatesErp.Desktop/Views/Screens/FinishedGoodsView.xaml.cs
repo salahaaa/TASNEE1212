@@ -59,7 +59,7 @@ public partial class FinishedGoodsView : UserControl
         _toolbar = new Views.ErpToolbar()
             .WithNew((_, _) => NewForm(), "سند تسليم جديد (F2)")
             .WithSave((_, _) => SaveAndIssue(), "حفظ وتوريد السند للمخزن — يبقى أمامك كما هو (F10)")
-            .WithSearch((_, _) => RefreshList(), "بحث في سندات التسليم المحفوظة (F9)")
+            .WithSearch((_, _) => { RefreshList(); RecSearchBox.Focus(); }, "بحث في سندات التسليم المحفوظة (F9)")
             .WithUndo((_, _) => UndoSmart(), "تراجع: يلغي الإدخالات غير المحفوظة ويعيد آخر نسخة محفوظة — لا يحذف أي سند")
             .WithPrint((_, _) => Print(), "طباعة السند (Ctrl+P)")
             .WithExcel((_, _) => Export())

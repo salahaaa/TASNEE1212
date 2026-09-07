@@ -66,7 +66,7 @@ public partial class DeliveryView : UserControl
         _toolbar = new Views.ErpToolbar()
             .WithNew((_, _) => NewForm(), "سند تسليم جديد (F2)")
             .WithSave((_, _) => Save(), "حفظ سند التسليم — يبقى السند أمامك كما هو (F10)")
-            .WithSearch((_, _) => RefreshList(), "بحث في سندات التسليم المحفوظة (F9)")
+            .WithSearch((_, _) => { RefreshList(); DelivSearchBox.Focus(); }, "بحث في سندات التسليم المحفوظة (F9)")
             .WithUndo((_, _) => UndoSmart(), "تراجع: يلغي الإدخالات غير المحفوظة ويعيد آخر نسخة محفوظة — لا يحذف أي سند")
             .WithApprove((_, _) => Approve(), "🔒 اعتماد التسليم وخصم الرصيد")
             .WithUnapprove((_, _) => Unapprove(), "إلغاء التسليم وإعادة الكميات للرصيد")

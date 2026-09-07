@@ -60,29 +60,29 @@ public class ErpToolbar : WrapPanel
     /// <summary>هل الزر محجوب بالصلاحية؟ تستخدمها الشاشات كي لا تعيد تفعيل ما مُنع.</summary>
     public bool IsDenied(Button b) => b != null && _denied.Contains(b);
 
-    public ErpToolbar WithNew(RoutedEventHandler h, string label = "➕ جديد (F2)")
-    { NewBtn = AddBtn(label, "ErpPrimaryButton", h, null, "Create"); return this; }
+    public ErpToolbar WithNew(RoutedEventHandler h, string label = "➕ جديد")
+    { NewBtn = AddBtn(label, "ErpPrimaryButton", h, "جديد (F2)", "Create"); return this; }
 
-    public ErpToolbar WithSave(RoutedEventHandler h, string label = "💾 حفظ (F10)")
-    { SaveBtn = AddBtn(label, "ErpPrimaryButton", h, null, "Edit"); return this; }
+    public ErpToolbar WithSave(RoutedEventHandler h, string label = "💾 حفظ")
+    { SaveBtn = AddBtn(label, "ErpPrimaryButton", h, "حفظ (F10) — المستند يبقى مفتوحاً أمامك بعد الحفظ", "Edit"); return this; }
 
     public ErpToolbar WithUndo(RoutedEventHandler h, string label = "↩ تراجع")
     { UndoBtn = AddBtn(label, "ErpButton", h); return this; }
 
     public ErpToolbar WithEdit(RoutedEventHandler h)
-    { EditBtn = AddBtn("✏️ تعديل (F3)", "ErpButton", h, null, "Edit"); return this; }
+    { EditBtn = AddBtn("✏️ تعديل", "ErpButton", h, "تعديل (F3)", "Edit"); return this; }
 
     public ErpToolbar WithDelete(RoutedEventHandler h)
-    { DeleteBtn = AddBtn("🗑️ حذف (F8)", "ErpDangerButton", h, null, "Delete"); return this; }
+    { DeleteBtn = AddBtn("🗑️ حذف", "ErpDangerButton", h, "حذف (F8)", "Delete"); return this; }
 
     public ErpToolbar WithSearch(RoutedEventHandler h, string tooltip = null)
-    { SearchBtn = AddBtn("🔍 بحث (F9)", "ErpButton", h, tooltip); return this; }
+    { SearchBtn = AddBtn("🔍 بحث", "ErpButton", h, tooltip ?? "بحث (F9)"); return this; }
 
     public ErpToolbar WithRefresh(RoutedEventHandler h)
-    { RefreshBtn = AddBtn("🔄 تحديث (F5)", "ErpButton", h); return this; }
+    { RefreshBtn = AddBtn("🔄 تحديث", "ErpButton", h, "تحديث (F5)"); return this; }
 
-    public ErpToolbar WithPrint(RoutedEventHandler h, string label = "🖨️ طباعة (Ctrl+P)")
-    { PrintBtn = AddBtn(label, "ErpButton", h, null, "Print"); return this; }
+    public ErpToolbar WithPrint(RoutedEventHandler h, string label = "🖨️ طباعة")
+    { PrintBtn = AddBtn(label, "ErpButton", h, "طباعة (Ctrl+P)", "Print"); return this; }
 
     public ErpToolbar WithExcel(RoutedEventHandler h)
     { ExcelBtn = AddBtn("📊 Excel", "ErpButton", h, null, "Export"); return this; }
@@ -91,7 +91,7 @@ public class ErpToolbar : WrapPanel
     { ApproveBtn = AddBtn(label, "ErpApproveButton", h, null, "Approve"); return this; }
 
     public ErpToolbar WithUnapprove(RoutedEventHandler h, string tooltip = null)
-    { UnapproveBtn = AddBtn("🔓 إلغاء الاعتماد", "ErpDangerButton", h, tooltip, "Cancel"); return this; }
+    { UnapproveBtn = AddBtn("🔓 فكّ الاعتماد", "ErpDangerButton", h, tooltip ?? "إلغاء اعتماد المستند وإعادته للتعديل", "Cancel"); return this; }
 
     public ErpToolbar WithNavigation(RoutedEventHandler first, RoutedEventHandler prev, RoutedEventHandler next, RoutedEventHandler last)
     {
@@ -127,6 +127,10 @@ public class ErpToolbar : WrapPanel
             Style = (Style)System.Windows.Application.Current.FindResource(style),
             ToolTip = tooltip ?? label,
             Margin = new Thickness(3, 2, 3, 2),
+            // §B106: عرض أدنى موحّد — كان كل زر يأخذ عرض نصه فقط، فيظهر «حذف» قزماً
+            // بجانب «إلغاء الاعتماد». الحد الأدنى يُسوّي القِصار دون قصّ الطوال.
+            MinWidth = 92,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         if (h != null) b.Click += h;
