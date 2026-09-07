@@ -147,9 +147,18 @@ public static class PlanningPrintDocument
 
     private static Block Header(PlanningPrintModel m)
     {
+        // §B106.2 — كان العمود الثاني GridLength.Star بجانب عمود شعار ثابت (96).
+        // العمود النجمي انهار إلى بضعة بكسلات في الرصف الفعلي فتكسّر اسم الشركة
+        // رأسياً حرفاً حرفاً (مُثبَت بصورة من تشغيل حقيقي). النجمي يحتاج عرضاً كلياً
+        // معلوماً للجدول، ولا يتوفر له ذلك دائماً داخل FlowDocument.
+        // الحل: عرضان صريحان بالبكسل مشتقّان من عرض الصفحة — لا نجمي ينهار.
+        const double LogoCol = 96;
+        double textCol = PageW - (Margin * 2) - LogoCol;
+        if (textCol < 200) textCol = 200;
+
         var t = new Table { CellSpacing = 0 };
-        t.Columns.Add(new TableColumn { Width = new GridLength(96) });
-        t.Columns.Add(new TableColumn { Width = new GridLength(1, GridUnitType.Star) });
+        t.Columns.Add(new TableColumn { Width = new GridLength(LogoCol) });
+        t.Columns.Add(new TableColumn { Width = new GridLength(textCol) });
 
         var logo = new TableCell(LogoBlock(m.LogoBytes));
         var name = new TableCell(new Paragraph(new Run(m.CompanyNameAr)

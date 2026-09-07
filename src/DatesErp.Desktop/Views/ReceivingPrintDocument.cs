@@ -135,9 +135,16 @@ public static class ReceivingPrintDocument
     // ── الترويسة: شعار + اسم الشركة + عنوان وهاتف ──
     private static Block BuildHeader(ReceivingPrintModel m)
     {
+        // §B106.2 — نفس علة ترويسة الخطط: عمود نجمي بجانب عمود شعار ثابت ينهار
+        // إلى بضعة بكسلات فيتكسّر اسم الشركة رأسياً (مُثبَت بصورة من تشغيل حقيقي).
+        // عرضان صريحان مشتقّان من عرض الصفحة بدل النجمي.
+        const double LogoCol = 90;
+        double textCol = PageWidthA4 - (Margin * 2) - LogoCol;
+        if (textCol < 200) textCol = 200;
+
         var t = new Table { CellSpacing = 0 };
-        t.Columns.Add(new TableColumn { Width = new GridLength(90) });
-        t.Columns.Add(new TableColumn { Width = new GridLength(1, GridUnitType.Star) });
+        t.Columns.Add(new TableColumn { Width = new GridLength(LogoCol) });
+        t.Columns.Add(new TableColumn { Width = new GridLength(textCol) });
 
         var logoCell = new TableCell(BuildLogo(m.LogoBytes))
         {
