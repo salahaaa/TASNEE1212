@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>DateERP</AssemblyName>
+    <RootNamespace>DatesErp.Desktop</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.50.0</Version>
+    <Authors>شركة التمور</Authors>
+    <Product>Date ERP — نظام إدارة وتصنيع التمور</Product>
+    <Description>نظام سطح مكتب احترافي متعدد المستخدمين لإدارة وتصنيع التمور</Description>
+    <SatelliteResourceLanguages>ar</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DatesErp.Application\DatesErp.Application.csproj" />
+    <ProjectReference Include="..\DatesErp.Core\DatesErp.Core.csproj" />
+    <ProjectReference Include="..\DatesErp.Infrastructure\DatesErp.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.102.3" />
+    <PackageReference Include="PdfSharp" Version="6.1.1" />
+  </ItemGroup>
+
+</Project>

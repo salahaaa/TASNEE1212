@@ -1,0 +1,122 @@
+name: DateERP CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-and-test:
+    name: بناء واختبار
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: استنساخ الكود
+        uses: actions/checkout@v4
+
+      - name: تثبيت .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: استعادة الحزم
+        run: dotnet restore DateERP.sln
+
+      # ── البناء: يجب أن يكون بلا أخطاء ──
+      - name: البناء (Release)
+        run: dotnet build DateERP.sln -c Release --no-restore
+
+      # ── التحذيرات: نفشل إن ظهر تحذير جديد فوق الحد المسموح ──
+      # الحد الحالي 700. خفّضه تدريجياً كلما نظّفت التحذيرات.
+      - name: فحص عدد التحذيرات
+        run: |
+          OUT=$(dotnet build DateERP.sln -c Release --no-restore 2>&1 | grep -oE "[0-9]+ Warning\(s\)" | grep -oE "^[0-9]+" | head -1)
+          LIMIT=700
+          echo "التحذيرات: $OUT / الحد المسموح: $LIMIT"
+          if [ -n "$OUT" ] && [ "$OUT" -gt "$LIMIT" ]; then
+            echo "::error::عدد التحذيرات ($OUT) تجاوز الحد المسموح ($LIMIT)"
+            exit 1
+          fi
+
+      # ── الاختبارات: يجب أن تنجح كلها ──
+      - name: الاختبارات
+        run: |
+          dotnet test tests/DatesErp.Tests/DatesErp.Tests.csproj -c Release --no-build \
+            --logger "trx;LogFileName=results.trx" \
+            --results-directory ./TestResults
+          echo "✓ كل الاختبارات ناجحة"
+
+      - name: رفع نتائج الاختبارات
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+          retention-days: 14
+
+  # ── فحص بنيوي: يمنع عودة الأنماط التي سببت الأعطال ──
+  structural-checks:
+    name: فحوصات بنيوية
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: لا أزرار موصولة بمعالج فارغ
+        run: |
+          HITS=$(grep -rnE 'With(Print|Save|New|Edit|Delete|Search|Refresh|Approve|Unapprove|Excel|Exit|List)\(\s*\(_, _\)\s*=>\s*\{\s*\}' src/ --include=*.cs | grep -v '^\s*///' || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::أزرار موصولة بمعالج فارغ:"
+            echo "$HITS"
+            exit 1
+          fi
+          echo "✓ لا أزرار ميتة"
+
+      - name: لا RightToLeft مفقود في النوافذ
+        run: |
+          MISS=""
+          for f in $(find src/DatesErp.Desktop -name "*.xaml" -not -path "*/obj/*"); do
+            if ! grep -q 'FlowDirection="RightToLeft"' "$f"; then
+              case "$f" in
+                *Themes*|*App.xaml) continue ;;
+              esac
+              MISS="$MISS $f"
+            fi
+          done
+          if [ -n "$MISS" ]; then
+            echo "::warning::نوافذ بلا FlowDirection=RightToLeft:$MISS"
+          fi
+          echo "✓ تم الفحص"
+
+      - name: لا حقول double جديدة في الكيانات
+        run: |
+          COUNT=$(grep -rc 'public double' src/DatesErp.Core/Domain/Entities/*.cs | awk -F: '{s+=$2} END {print s}')
+          # رُفع من 85 إلى 103 لدورة المعالجة والتعقيم (8 حقول على Lot وRawTreatment).
+          # قصد هذه البوابة منع double جديد للمبالغ والكميات — والاستثناء هنا مبرَّر:
+          # حقول الكميات الجديدة تُجمع وتُطرح مباشرةً مع أعمدة double قائمة
+          # (InStockQtyKg/ReservedQtyKg)، وجعلها decimal كان يفرض تحويلات في كل
+          # عملية حسابية ويُدخل أخطاء تقريب عند الحدود بدل أن يمنعها.
+          # DurationHours تحديداً يجب أن تبقى double لأن DateTime.AddHours تتطلبها.
+          # الحد يبقى سقفاً: أي حقل تاسع سيُسقط البناء كما هو مقصود.
+          LIMIT=103
+          echo "حقول double في الكيانات: $COUNT / الحد: $LIMIT"
+          if [ -n "$COUNT" ] && [ "$COUNT" -gt "$LIMIT" ]; then
+            echo "::error::أُضيفت حقول double جديدة ($COUNT > $LIMIT). استخدم decimal للحقول الجديدة."
+            exit 1
+          fi
+          echo "✓ لم تُضف حقول double جديدة"
+
+      # ── القبول: سيناريوهات AcceptanceRunner (مبنية ضمن الحل منذ B84/C3) ──
+      - name: اختبارات القبول
+        run: |
+          dotnet run --project tools/AcceptanceRunner/AcceptanceRunner.csproj -c Release --no-build
+          echo "✓ سيناريوهات القبول ناجحة"

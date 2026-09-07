@@ -1,0 +1,231 @@
+using DatesErp.Core.Common;
+
+namespace DatesErp.Core.Domain.Entities;
+
+/// <summary>§7 — خطة الإنتاج.</summary>
+public class ProductionPlan : WorkflowDocument
+{
+    /// <summary>§B75: نطاق التخطيط يُحفظ في الرأس ويُستعاد عند الفتح (Multi | Single).</summary>
+    public string ScopeMode { get; set; } = "Multi";
+    /// <summary>§B75: عميل الخطة المحددة إن كان النطاق «عميل محدد».</summary>
+    public int? SingleCustomerId { get; set; }
+    public string PlanTitle { get; set; }
+    public string PlanType { get; set; } = "Daily"; // Daily | Period
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public int? ShiftId { get; set; }
+    public int? LineId { get; set; }
+    public bool IsClosed { get; set; }
+    public DateTime? ClosedDate { get; set; }
+    /// <summary>§B79: المستخدم الذي أقفل الخطة.</summary>
+    public int? ClosedBy { get; set; }
+
+    public List<ProductionPlanItem> Items { get; set; } = new();
+}
+
+public class ProductionPlanItem : BaseEntity
+{
+    public int PlanId { get; set; }
+    public string SourceType { get; set; } = "Manual"; // Manual | FromReceiving
+    public int? LotId { get; set; }
+    public int? ShipmentId { get; set; } // §المرجع الكامل: الشحنة التي منها الدفعة
+    public int? CustomerId { get; set; }
+    public int ProductId { get; set; }
+    public int? PackagingTypeId { get; set; }
+    public double PlannedQtyKg { get; set; }
+    public int PlannedCartons { get; set; }
+    public DateTime? ScheduledDate { get; set; }
+    public int? SuggestedShiftId { get; set; }
+    public int? SuggestedLineId { get; set; }
+    public int PriorityNo { get; set; }
+    public string Status { get; set; } = DocStatuses.Draft;
+    // §الخطة الطويلة: تقدم مستقل لكل بند (عميل/صنف/يوم/وردية)
+    public double ProducedQtyKg { get; set; }
+    public double AcceptedQtyKg { get; set; }
+    public double DeliveredQtyKg { get; set; }
+    public string ExecutionStatus { get; set; } = "NotStarted"; // NotStarted | InProgress | Partial | Completed
+    /// <summary>
+    /// §إصلاح حرج: البند أُقفل نهائياً على ما أُنتج.
+    /// كان الإقفال يكتب PlannedQtyKg = ProducedQtyKg فيمحو أساس الخطة، فتظهر كل خطة
+    /// بنسبة إنجاز 100% في التقارير ويضيع ما كان مخططاً أصلاً. الآن يُحرَّر الحجز
+    /// بهذا العلم ويظل المخطط محفوظاً للمقارنة.
+    /// </summary>
+    public bool IsClosed { get; set; }
+    /// <summary>§ما حُرر من الحجز عند الإقفال المبكر (المخطط − المنتَج) — للتدقيق.</summary>
+    public double ReleasedQtyKg { get; set; }
+}
+
+/// <summary>§7 — أمر الإنتاج.</summary>
+public class ProductionOrder : WorkflowDocument
+{
+    public string SourceType { get; set; } = "Manual"; // Manual | FromPlan
+    public int? SourcePlanId { get; set; }
+    public int? CustomerId { get; set; }
+    public DateTime? ProductionDate { get; set; }
+    public int? ShiftId { get; set; }
+    public int? LineId { get; set; }
+    public bool IsClosed { get; set; }
+    public DateTime? ClosedDate { get; set; }
+    /// <summary>§B95 — سبب إغلاق الأمر بعجز (تسوية موثقة): فارغ عند الإغلاق باكتمال الإنتاج.</summary>
+    public string CloseReason { get; set; }
+
+    public List<ProductionOrderItem> Items { get; set; } = new();
+    public List<ProductionOrderMaterial> Materials { get; set; } = new();
+}
+
+public class ProductionOrderItem : BaseEntity
+{
+    public int OrderId { get; set; }
+    public int? PlanItemId { get; set; }
+    public int? LotId { get; set; }
+    public int? ShipmentId { get; set; } // يُنقل كما هو من سطر الخطة
+    public int? CustomerId { get; set; } // ملكية السطر محفوظة لكل سطر
+    public int ProductId { get; set; }
+    public int? PackagingTypeId { get; set; }
+    public double PlannedQtyKg { get; set; }
+    public int PlannedCartons { get; set; }
+    public double ProducedQtyKg { get; set; }
+    public int ProducedCartons { get; set; }
+    public string Status { get; set; } = DocStatuses.Draft;
+    /// <summary>§إصلاح حرج: بند الأمر أُقفل نهائياً — يُحرر الحجز دون محو المخطط.</summary>
+    public bool IsClosed { get; set; }
+    /// <summary>§نظام الوحدات: وزن الكرتون المعتمد وقت إنشاء الأمر — يجمّد التعريف اللاحق للعبوة
+    /// بأثر رجعي (إن تغير وزن الكرتون غداً لا تتغير عمليات الأمس).</summary>
+    public double CartonWeightKg { get; set; }
+    /// <summary>
+    /// §حفظ التعريف تاريخياً كاملاً: القاعدة توجب حفظ عدد القوالب ووزن القالب وقت العملية
+    /// لا وزن الكرتون وحده — لأن تعريف المنتج قد يتغير لاحقاً.
+    /// (decimal لا double: قاعدة CI تمنع إضافة double جديد في الكيانات.)
+    /// </summary>
+    public int MoldsCount { get; set; }
+    public decimal MoldWeightKg { get; set; }
+}
+
+/// <summary>§7 — المواد المحتسبة/المصروفة لأمر الإنتاج.</summary>
+public class ProductionOrderMaterial : BaseEntity
+{
+    public int OrderId { get; set; }
+    public int MaterialId { get; set; }
+    public double CalculatedQty { get; set; }
+    public double ActualIssuedQty { get; set; }
+    public double ConsumedQty { get; set; }
+    public double WastedQty { get; set; }
+    public double ReturnedQty { get; set; }
+    public string UnitOfMeasure { get; set; }
+    public bool IsAutoCalculated { get; set; } = true;
+    public string Status { get; set; } = DocStatuses.Draft; // Draft | Issued | Consumed
+}
+
+/// <summary>§7 — جلسة تنفيذ الإنتاج.</summary>
+public class ProductionExecution : WorkflowDocument
+{
+    public int OrderId { get; set; }
+    public int? LineId { get; set; }
+    public int? ShiftId { get; set; }
+    public DateTime? StartDateTime { get; set; }
+    public DateTime? EndDateTime { get; set; }
+    public double ActualQtyKg { get; set; }
+    public int ActualCartons { get; set; }
+    public double WastageQtyKg { get; set; }
+
+    /// <summary>§نموذج الإقفال اليومي: ماذا خرج من الصالة.</summary>
+    public double HashfKg { get; set; }
+    public double NawaKg { get; set; }
+    /// <summary>كم الخام استُهلك (صُرف عند اعتماد الأمر).</summary>
+    public double ConsumedRawKg { get; set; }
+    /// <summary>المتبقي في صالة الإنتاج = الخام المستهلك − المخرجات.</summary>
+    public double RemainingInHallKg { get; set; }
+    /// <summary>ترحيل المتبقي في الصالة إلى خطة اليوم التالي.</summary>
+    public bool CarryToNextDay { get; set; }
+    /// <summary>أُرسل للجودة — الفحص متوقع بعد يومَي تبريد.</summary>
+    public bool QualitySent { get; set; }
+    public DateTime? ExpectedQualityDate { get; set; }
+    /// <summary>هل أُقفل يوم الإنتاج لهذا الأمر (لا إقفالين على نفس الأمر).</summary>
+    public bool IsDayClosed { get; set; }
+    public string ClosingNotes { get; set; }
+
+    public List<ExecutionDowntime> Downtimes { get; set; } = new();
+
+    /// <summary>
+    /// §لا ثوابت: المخرجات الثانوية الفعلية لهذه الجلسة بأصنافها من جدول ByProducts.
+    /// العمودان HashfKg/NawaKg أعلاه بقيا للبيانات السابقة فقط — الجديد يُسجَّل هنا.
+    /// </summary>
+    public List<ExecutionByProduct> ByProducts { get; set; } = new();
+}
+
+/// <summary>§مخرج ثانوي مسجَّل لإقفال يوم إنتاج — الصنف من جدول ByProducts لا من الكود.</summary>
+public class ExecutionByProduct : BaseEntity
+{
+    public int ExecutionId { get; set; }
+    public int ByProductId { get; set; }
+    /// <summary>§decimal لا double — قاعدة CI: لا حقول double جديدة في الكيانات.</summary>
+    public decimal Qty { get; set; }
+}
+
+/// <summary>§الإقفال اليومي: بند توقف (كم ساعة ولماذا) — «توقفنا عدد كذا ساعات بسبب كذا».</summary>
+public class ExecutionDowntime : BaseEntity
+{
+    /// <summary>إن كان التوقف على جلسة/إقفال أمر.</summary>
+    public int? ExecutionId { get; set; }
+    /// <summary>إن كان التوقف على مستند إقفال خطة.</summary>
+    public int? ClosingId { get; set; }
+    public double Hours { get; set; }
+    public string ReasonAr { get; set; }
+    /// <summary>
+    /// §السجل الزمني للتوقف (قالب الطباعة المرجعي): وقت التوقف ووقت الاستئناف.
+    /// نصّان حرّان (HH:mm) لأن الدقة المطلوبة دقيقة لا لحظة — ويُطبعان كما أُدخلا.
+    /// </summary>
+    public string StartTime { get; set; }
+    public string EndTime { get; set; }
+}
+
+/// <summary>
+/// §مستند إقفال الخطة: تسليم الخطة كاملة بأصنافها أو صنف واحد أو جزء من صنف،
+/// لكل صنف: كم خاماً استُلم، كم كرتوناً أُنتج تاماً، المخرجات الثانوية، والمتبقي
+/// الذي يُعاد لمخزن الخام بنفس العميل والدفعة. يعمل للخطة اليومية والفترية.
+/// </summary>
+public class PlanClosing : WorkflowDocument
+{
+    public int PlanId { get; set; }
+    public DateTime? ClosingDate { get; set; }
+    public bool QualitySent { get; set; }
+    /// <summary>§B57: الكمية المرسلة للفحص يختارها المستخدم عند الإقفال (كجم).</summary>
+    public double SentToQualityKg { get; set; }
+    public DateTime? ExpectedQualityDate { get; set; }
+    public string ClosingNotes { get; set; }
+    /// <summary>§B10 تقدير النظام للكراتين الفارغة (المستهلك ÷ وزن كرتون الخام).</summary>
+    public double EmptyCartonsEstimated { get; set; }
+    /// <summary>§B10 الكراتين الفارغة الفعلية المؤكَدة من المشرف (فارغ = التقدير).</summary>
+    public double? EmptyCartonsActual { get; set; }
+    public List<PlanClosingItem> Items { get; set; } = new();
+    public List<ExecutionDowntime> Downtimes { get; set; } = new();
+}
+
+/// <summary>§بند إقفال الخطة: حساب كامل لصنف واحد (أو جزء منه) عند الإقفال.</summary>
+public class PlanClosingItem : BaseEntity
+{
+    public int ClosingId { get; set; }
+    public int PlanItemId { get; set; }
+    public int? OrderId { get; set; }
+    public int? LotId { get; set; }
+    public int? CustomerId { get; set; }
+    public int ProductId { get; set; }
+    /// <summary>كم خاماً استُلم/استُهلك لهذا البند.</summary>
+    public double ConsumedRawKg { get; set; }
+    /// <summary>كم أُنتج تاماً (كجم).</summary>
+    public double ProducedKg { get; set; }
+    /// <summary>كم كرتوناً أُنتج.</summary>
+    public int ProducedCartons { get; set; }
+    /// <summary>§المخرجات الثانوية الديناميكية لهذا البند (أصنافها من إعدادات الأصناف).</summary>
+    public List<PlanClosingByProduct> ByProducts { get; set; } = new();
+    /// <summary>§نظام الوحدات: وزن الكرتون وقت الإقفال — لا يتغير بتعريف العبوة لاحقاً.</summary>
+    public double CartonWeightKg { get; set; }
+    /// <summary>§تعريف التعبئة كاملاً وقت الإقفال (قوالب × وزن قالب) — تاريخي لا يتغير.</summary>
+    public int MoldsCount { get; set; }
+    public decimal MoldWeightKg { get; set; }
+    public double HashfKg { get; set; }
+    public double NawaKg { get; set; }
+    public double WastageKg { get; set; }
+    /// <summary>المتبقي المُعاد لمخزن الخام بنفس العميل والدفعة.</summary>
+    public double ReturnedToRawKg { get; set; }
+}

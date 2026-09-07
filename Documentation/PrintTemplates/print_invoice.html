@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>فاتورة مبيعات وتعبئة {{ inv.InvoiceNumber }} — {{ company.CompanyNameAr or 'الشركة اليمنية لتعبئة وتصنيع التمور' }}</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm 12mm 12mm 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
+  body { background: #F8FAFC; color: #1E293B; font-size: 12px; line-height: 1.4; }
+  
+  .print-page {
+    width: 100%; max-width: 210mm; margin: 10px auto; background: #FFFFFF;
+    border: 2px solid #0A246A; border-radius: 8px; padding: 16px 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  }
+  .no-print-toolbar {
+    max-width: 210mm; margin: 12px auto 6px auto; display: flex; justify-content: space-between; align-items: center;
+    background: #0A246A; color: #FFFFFF; padding: 8px 16px; border-radius: 6px;
+  }
+  .btn-print {
+    background: #FFFFFF; color: #0A246A; border: none; padding: 6px 16px; font-weight: bold; border-radius: 4px; cursor: pointer;
+  }
+  .header-tbl { width: 100%; border-bottom: 2px solid #0A246A; padding-bottom: 8px; margin-bottom: 12px; }
+  .company-title { font-size: 16px; font-weight: bold; color: #0A246A; }
+  .doc-badge {
+    background: #0A246A; color: #FFFFFF; font-size: 14px; font-weight: bold; padding: 4px 14px; border-radius: 4px; display: inline-block;
+  }
+  .meta-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px;
+    background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; font-size: 11.5px;
+  }
+  .meta-item { display: flex; justify-content: space-between; border-bottom: 1px dashed #CBD5E1; padding-bottom: 3px; }
+  .meta-label { font-weight: bold; color: #475569; }
+  .meta-val { font-weight: bold; color: #0F172A; }
+  
+  .items-tbl { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11.5px; }
+  .items-tbl th {
+    background: #0A246A; color: #FFFFFF; padding: 6px 8px; border: 1px solid #0A246A; text-align: center;
+  }
+  .items-tbl td {
+    padding: 6px 8px; border: 1px solid #CBD5E1; text-align: center;
+  }
+  .items-tbl tr:nth-child(even) td { background: #F8FAFC; }
+  
+  .totals-box {
+    display: flex; justify-content: flex-end; margin-bottom: 16px;
+  }
+  .totals-tbl { width: 320px; border-collapse: collapse; font-size: 12px; border: 1px solid #0A246A; }
+  .totals-tbl td { padding: 5px 10px; border: 1px solid #CBD5E1; }
+  .totals-tbl .grand-row td { background: #E8EEF7; font-weight: bold; color: #0A246A; font-size: 13px; }
+  
+  .tafqeet-box {
+    background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 4px; padding: 6px 12px; font-size: 11.5px; font-weight: bold; color: #92400E; margin-bottom: 16px;
+  }
+  
+  .signatures-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; margin-top: 24px; padding-top: 12px; border-top: 1px solid #CBD5E1; font-size: 11.5px;
+  }
+  .sig-title { font-weight: bold; color: #0A246A; margin-bottom: 30px; }
+  .sig-line { border-top: 1px dotted #64748B; padding-top: 4px; color: #64748B; font-size: 10.5px; }
+
+  @media print {
+    .no-print-toolbar { display: none !important; }
+    body { background: #FFFFFF; }
+    .print-page { border: none; box-shadow: none; padding: 0; margin: 0; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print-toolbar">
+  <div><b>🖨️ معاينة طباعة فاتورة المبيعات والتسليم (رسمي A4)</b></div>
+  <button type="button" class="btn-print" onclick="window.print()">طباعة الآن (Ctrl+P)</button>
+</div>
+
+<div class="print-page">
+  <table class="header-tbl">
+    <tr>
+      <td style="width:55%;">
+        <div class="company-title">🌴 {{ company.CompanyNameAr or 'الشركة اليمنية لتعبئة وتصنيع التمور' }}</div>
+        <div style="font-size:11px; color:#475569; margin-top:2px;">{{ company.Address or 'الجمهورية اليمنية — قطاع التعبئة والتصنيع' }}</div>
+        <div style="font-size:11px; color:#475569;">هاتف: {{ company.Phone1 or '777000000' }} | الرقم الضريبي: {{ company.TaxNumber or '300124589' }}</div>
+      </td>
+      <td style="width:45%; text-align:left;">
+        <div class="doc-badge">فاتورة مبيعات وتعبئة</div>
+        <div style="font-size:13px; font-weight:bold; color:#0A246A; margin-top:4px;">رقم الفاتورة: {{ inv.InvoiceNumber }}</div>
+        <div style="font-size:11px; color:#64748B;">تاريخ الإصدار: {{ inv.InvoiceDate }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- بيانات العميل والتسليم -->
+  <div class="meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">العميل المستلم:</span>
+      <span class="meta-val">{{ customer.CustomerName if customer else '—' }} ({{ customer.CustomerCode if customer else '' }})</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">سند التسليم المعتمد:</span>
+      <span class="meta-val">{{ delivery.DeliveryNumber if delivery else (inv.CustomerDeliveryID or '—') }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">العنوان والهاتف:</span>
+      <span class="meta-val">{{ customer.Address or 'اليمن' }} — {{ customer.Phone1 or '—' }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">نوع الفاتورة وشروط السداد:</span>
+      <span class="meta-val">{{ inv.InvoiceType }} ({{ inv.PaymentTerms }})</span>
+    </div>
+  </div>
+
+  <!-- جدول البنود والكميات والأسعار -->
+  <table class="items-tbl">
+    <thead>
+      <tr>
+        <th style="width:30px;">#</th>
+        <th>كود الصنف</th>
+        <th>اسم الصنف التام 🏷️</th>
+        <th>نوع العبوة والتغليف 📦</th>
+        <th>رقم الدفعة</th>
+        <th style="width:70px;">الكراتين</th>
+        <th style="width:85px;">الوزن (كجم)</th>
+        <th style="width:85px;">سعر الوحدة</th>
+        <th style="width:100px;">الإجمالي (ريال)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><b>{{ it.ProductCode or '—' }}</b></td>
+          <td style="text-align:right; font-weight:bold; color:#0A246A;">{{ it.ProductNameAr }}</td>
+          <td>{{ it.PackageNameAr or 'كرتون' }}</td>
+          <td><span style="font-family:monospace;">{{ it.LotCode or it.LotID or '—' }}</span></td>
+          <td><b>{{ it.PackageCount }}</b></td>
+          <td><b>{{ it.QuantityKg }}</b> كجم</td>
+          <td>{{ "%.2f"|format(it.UnitPrice) }}</td>
+          <td style="font-weight:bold; color:#0A246A;">{{ "%.2f"|format(it.TotalPrice) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- الملخص المالي والضريبي -->
+  <div class="totals-box">
+    <table class="totals-tbl">
+      <tr>
+        <td>إجمالي الكراتين المفوترة 📦:</td>
+        <td style="font-weight:bold; text-align:left;">{{ inv.TotalCartons }} كرتون</td>
+      </tr>
+      <tr>
+        <td>إجمالي الوزن المسلم ⚖️:</td>
+        <td style="font-weight:bold; text-align:left;">{{ inv.TotalQtyKg }} كجم</td>
+      </tr>
+      <tr>
+        <td>المجموع الفرعي (Subtotal):</td>
+        <td style="font-weight:bold; text-align:left;">{{ "%.2f"|format(inv.SubTotal) }} ريال</td>
+      </tr>
+      {% if inv.TaxAmount and inv.TaxAmount > 0 %}
+      <tr>
+        <td>ضريبة القيمة المضافة (Tax):</td>
+        <td style="font-weight:bold; text-align:left;">{{ "%.2f"|format(inv.TaxAmount) }} ريال</td>
+      </tr>
+      {% endif %}
+      {% if inv.DiscountAmount and inv.DiscountAmount > 0 %}
+      <tr>
+        <td>الخصم التجاري (Discount):</td>
+        <td style="font-weight:bold; text-align:left; color:#DC2626;">- {{ "%.2f"|format(inv.DiscountAmount) }} ريال</td>
+      </tr>
+      {% endif %}
+      <tr class="grand-row">
+        <td>صافي الفاتورة المستحق (Grand Total):</td>
+        <td style="text-align:left;">{{ "%.2f"|format(inv.GrandTotal) }} ريال يمني</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="tafqeet-box">
+    <span>المبلغ الإجمالي كتابةً: </span>
+    <span>فقط وقدره {{ "%.2f"|format(inv.GrandTotal) }} ريال يمني لا غير. (مسدد / قيد على حساب العميل)</span>
+  </div>
+
+  {% if inv.Notes %}
+  <div style="font-size:11px; color:#475569; margin-bottom:14px; background:#F8FAFC; border:1px solid #E2E8F0; padding:6px 10px; border-radius:4px;">
+    <b>ملاحظات:</b> {{ inv.Notes }}
+  </div>
+  {% endif %}
+
+  <!-- التوقيعات الرسمية -->
+  <div class="signatures-grid">
+    <div>
+      <div class="sig-title">أمين المستودع</div>
+      <div class="sig-line">التوقيع والختم</div>
+    </div>
+    <div>
+      <div class="sig-title">المحاسب المسؤول</div>
+      <div class="sig-line">التوقيع والاعتماد</div>
+    </div>
+    <div>
+      <div class="sig-title">المدير المالي</div>
+      <div class="sig-line">المصادقة الرسمية</div>
+    </div>
+    <div>
+      <div class="sig-title">المستلم / العميل</div>
+      <div class="sig-line">استلمت البضاعة والفاتورة</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

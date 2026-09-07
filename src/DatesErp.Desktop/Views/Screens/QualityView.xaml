@@ -1,0 +1,214 @@
+<UserControl x:Class="DatesErp.Desktop.Views.Screens.QualityView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:DatesErp.Desktop.Views.Screens"
+             FlowDirection="RightToLeft">
+    <!--
+      §قاعدة التصميم لكل الواجهات: لا تمرير عمودي — كل شيء في شاشة واحدة.
+      • الشريط العلوي (الحالة + المصدر + القرار) ثابت.
+      • بطاقة بيانات الفحص تُملأ آلياً من أمر الإنتاج — لا يعيد المستخدم إدخالها.
+      • جدول نتائج الفحص يأخذ كل المساحة المتبقية (*).
+      • شريط الإجماليات والأزرار في الأسفل دائماً — لا حاجة للصعود والنزول.
+      • النقر المفرد يبدأ التحرير (SelectionUnit=Cell + BeginEdit) — الحقول تستقبل الكتابة فوراً.
+    -->
+    <UserControl.Resources>
+        <local:MatchStatusBrushConverter x:Key="MatchBrush"/>
+        <Style x:Key="Hdr" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="#666"/>
+            <Setter Property="Margin" Value="0,0,0,1"/>
+        </Style>
+        <Style x:Key="Val" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#0A246A"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- ══ الأسفل: شريط الإجماليات — ظاهر دائماً ══ -->
+        <Border DockPanel.Dock="Bottom" Background="#ECE9D8" BorderBrush="#7F9DB9" BorderThickness="0,1,0,0" Padding="8,4">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" FontSize="10.5" Foreground="#555" VerticalAlignment="Center">
+                    <Run Text="مسؤول الجودة: "/><Run x:Name="InspectorName" FontWeight="Bold"/>
+                    <Run Text=" · MRPQC1002"/>
+                </TextBlock>
+                <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock Text="المفحوص:" FontSize="11.5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TotChecked" FontWeight="Bold" Foreground="#0A246A" FontSize="11.5" Margin="3,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="المقبول:" FontSize="11.5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TotAccepted" FontWeight="Bold" Foreground="#16A34A" FontSize="11.5" Margin="3,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="المرفوض:" FontSize="11.5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TotRejected" FontWeight="Bold" Foreground="#DC2626" FontSize="11.5" Margin="3,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="مخرجات ثانوية:" FontSize="11.5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TotByProduct" FontWeight="Bold" Foreground="#B45309" FontSize="11.5" Margin="3,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="الفاقد:" FontSize="11.5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TotLoss" FontWeight="Bold" Foreground="#7C3AED" FontSize="11.5" Margin="3,0,12,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="نسبة القبول:" FontSize="11.5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TotPct" FontWeight="Bold" Foreground="#0A246A" FontSize="11.5" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ══ الأعلى: الحالة + المصدر + القرار ══ -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,0,0,6" Padding="10,6">
+            <StackPanel>
+                <TextBlock x:Name="DocState" Text="حالة الفحص: فحص جودة جديد 🟡 — اختر أمر الإنتاج لتنزيل بياناته ونتائجه تلقائياً"
+                           FontSize="12" FontWeight="Bold" Foreground="#0A246A" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- المصدر -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="مصدر الفحص:" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <RadioButton x:Name="SrcOrder" Content="📝 أمر إنتاج" IsChecked="True" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,10,0" Checked="Source_Changed"/>
+                        <RadioButton x:Name="SrcExec" Content="⚡ جلسة تشغيل" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,10,0" Checked="Source_Changed"/>
+                        <RadioButton x:Name="SrcManual" Content="✍️ يدوي" FontSize="11.5" VerticalAlignment="Center" Checked="Source_Changed"/>
+                        <ComboBox x:Name="SourceBox" Width="330" Margin="10,0,0,0" SelectionChanged="Source_Selected"/>
+                    </StackPanel>
+
+                    <!-- التاريخ والنوع في الوسط -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="تاريخ الفحص:" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <DatePicker x:Name="CheckDate" Width="120"/>
+                        <TextBlock Text="نوع الفحص:" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                        <ComboBox x:Name="TypeBox" Width="140" SelectedIndex="0">
+                            <ComboBoxItem Content="نهائي — بعد التبريد"/>
+                            <ComboBoxItem Content="أثناء العملية"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- قرار الجودة -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="القرار:" FontWeight="Bold" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <RadioButton x:Name="DecisionPassed" Content="🟢 مطابق" IsChecked="True" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <RadioButton x:Name="DecisionQuarantine" Content="🟡 حجز" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <RadioButton x:Name="DecisionRejected" Content="🔴 مرفوض" FontSize="11.5" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ══ بطاقة بيانات الفحص — تُملأ آلياً (§1) ══ -->
+        <Border DockPanel.Dock="Top" x:Name="HeaderCard" Background="White" BorderBrush="#7F9DB9" BorderThickness="1" Padding="8,6" Margin="0,0,0,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,4">
+                    <TextBlock Text="رقم أمر الإنتاج" Style="{StaticResource Hdr}"/><TextBlock x:Name="HOrderNo" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,8,4">
+                    <TextBlock Text="خطة الإنتاج" Style="{StaticResource Hdr}"/><TextBlock x:Name="HPlanNo" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,8,4">
+                    <TextBlock Text="العميل" Style="{StaticResource Hdr}"/><TextBlock x:Name="HCustomer" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,8,4">
+                    <TextBlock Text="تاريخ الإنتاج" Style="{StaticResource Hdr}"/><TextBlock x:Name="HProdDate" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="4" Margin="0,0,0,4">
+                    <TextBlock Text="دفعة الخام" Style="{StaticResource Hdr}"/><TextBlock x:Name="HLot" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,4">
+                    <TextBlock Text="المنتج التام" Style="{StaticResource Hdr}"/><TextBlock x:Name="HProduct" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,8,4">
+                    <TextBlock Text="الكمية المنتجة" Style="{StaticResource Hdr}"/><TextBlock x:Name="HQty" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,8,4">
+                    <TextBlock Text="الوحدة" Style="{StaticResource Hdr}"/><TextBlock x:Name="HUnit" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="3" Margin="0,0,8,4">
+                    <TextBlock Text="التاريخ" Style="{StaticResource Hdr}"/><TextBlock x:Name="HDate" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="4" Margin="0,0,0,4">
+                    <TextBlock Text="الوردية" Style="{StaticResource Hdr}"/><TextBlock x:Name="HShift" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,0">
+                    <TextBlock Text="خط الإنتاج" Style="{StaticResource Hdr}"/><TextBlock x:Name="HLine" Style="{StaticResource Val}" Text="—"/>
+                </StackPanel>
+                <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,8,0">
+                    <TextBlock Text="نتائج الفحص المتاحة لهذا الصنف (§معرَّفة في الإعدادات — لا ثوابت)" Style="{StaticResource Hdr}"/>
+                    <TextBlock x:Name="HAllowed" Style="{StaticResource Val}" FontSize="11" Foreground="#16A34A" Text="—" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Row="2" Grid.Column="4" Margin="0">
+                    <TextBlock Text="الصنف المفحوص (لإضافة نتيجة)" Style="{StaticResource Hdr}"/>
+                    <ComboBox x:Name="ProductBox" FontSize="11.5" SelectionChanged="ProductBox_Changed"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ══ إضافة نتيجة + ملاحظات ══ -->
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Margin="0,6,0,0" Padding="8,5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="➕ نتيجة" Style="{StaticResource ErpPrimaryButton}" Click="AddResult_Click" ToolTip="يضيف صفاً بنتيجة فحص — النوع والوحدة من تعريف الصنف"/>
+                    <Button Content="🗑️ حذف المحدد" Style="{StaticResource ErpButton}" Click="DeleteResult_Click" Margin="6,0,0,0"/>
+                    <Button Content="🧪 معايير الفحص" Style="{StaticResource ErpButton}" Click="ShowStandards_Click" Margin="6,0,0,0"
+                            ToolTip="معايير الفحص المخبري والحسي — نافذة منبثقة بدل جدول دائم لتبقى الشاشة الواحدة"/>
+                    <TextBlock Text="ملاحظات مسؤول الجودة:" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="14,0,5,0"/>
+                    <TextBox x:Name="InspectorNotesBox" Width="330" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" x:Name="UnitsHint" Text="" FontSize="10.5" Foreground="#B45309" TextWrapping="Wrap"
+                           HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ جدول نتائج الفحص — يأخذ كل المساحة المتبقية ══ -->
+        <Border Style="{StaticResource Card}" Padding="8,6">
+            <DockPanel LastChildFill="True">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,5">
+                    <TextBlock DockPanel.Dock="Right" Text="📦 نتائج الفحص والفرز — النوع والكمية والوحدة من تعريف الصنف (§لا أنواع ولا وحدات ثابتة في الكود)"
+                               FontSize="11.5" FontWeight="Bold" Foreground="#0A246A"/>
+                    <TextBlock DockPanel.Dock="Left" x:Name="ItemsBadge" Text="0 نتيجة" FontSize="11" Foreground="#333"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                </DockPanel>
+                <DataGrid x:Name="ResultsGrid" RowHeight="28" HeadersVisibility="Column"
+                          IsReadOnly="False" SelectionMode="Single" SelectionUnit="Cell"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          AutoGenerateColumns="False" GridLinesVisibility="All"
+                          CellEditEnding="Results_CellEditEnding"
+                          PreviewMouseLeftButtonDown="Results_MouseDown"
+                          CurrentCellChanged="Results_CurrentCellChanged">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="FontSize" Value="12"/>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="#" Binding="{Binding RowNo}" Width="34" IsReadOnly="True"/>
+                        <DataGridComboBoxColumn x:Name="ColResultType" Header="نتيجة الفحص" Width="190"
+                                                SelectedValueBinding="{Binding ResultTypeId, UpdateSourceTrigger=PropertyChanged}"
+                                                DisplayMemberPath="NameAr" SelectedValuePath="ResultTypeId"/>
+                        <DataGridTextColumn Header="التصنيف" Binding="{Binding KindAr}" Width="100" IsReadOnly="True"/>
+                        <!-- §الوحدة تختلف من صف لآخر (نتيجة بالكرتون وأخرى بالكجم) — فلا تُثبَّت في الترويسة، وعمود «الوحدة» المجاور هو المرجع -->
+                        <DataGridTextColumn Header="الكمية (بوحدة الصف)" Binding="{Binding Qty, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="100"/>
+                        <DataGridComboBoxColumn x:Name="ColUnit" Header="الوحدة" Width="110"
+                                                SelectedValueBinding="{Binding UnitId, UpdateSourceTrigger=PropertyChanged}"
+                                                DisplayMemberPath="UnitNameAr" SelectedValuePath="Id"/>
+                        <DataGridTextColumn Header="الصنف / المنتج" Binding="{Binding ProductName}" Width="150" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="العميل" Binding="{Binding CustomerName}" Width="130" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="الدفعة" Binding="{Binding LotCode}" Width="100" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="ملاحظات" Binding="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+    </DockPanel>
+</UserControl>

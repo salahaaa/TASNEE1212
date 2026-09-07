@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- §دين تقني مُقرّ به: تفعيل Nullable على كود قديم يُنتج هذا الضجيج.
+         الكبت موثّق ومقصود — خفّض هذه القائمة تدريجياً كلما نُظّف كل ملف.
+         لا تُضف تحذيرات جديدة إلى هذه القائمة. -->
+    <NoWarn>$(NoWarn);CS8618;CS8625;CS8601;CS8603;CS8602;CS8600;CS8629;CS8604;CS8632;CS8714;CS8765</NoWarn>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DatesErp.Core\DatesErp.Core.csproj" />
+    <ProjectReference Include="..\..\src\DatesErp.Application\DatesErp.Application.csproj" />
+    <ProjectReference Include="..\..\src\DatesErp.Infrastructure\DatesErp.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
