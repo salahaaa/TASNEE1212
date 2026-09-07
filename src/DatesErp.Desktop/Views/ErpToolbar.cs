@@ -119,13 +119,41 @@ public class ErpToolbar : WrapPanel
         if (locked && lockMsg != null && SaveBtn != null) SaveBtn.Content = lockMsg;
     }
 
+    /// <summary>
+    /// §B106.1 — يستخرج تسمية موجزة: ما قبل أول «—» أو «:» أو «(اختصار)».
+    /// يحافظ على بادئة الأيقونة، ولا يقصّ ما كان موجزاً أصلاً.
+    /// </summary>
+    private static string ShortLabel(string label)
+    {
+        if (string.IsNullOrWhiteSpace(label)) return label;
+        string s = label;
+        int cut = -1;
+        foreach (var sep in new[] { " — ", " – ", ": ", " - " })
+        {
+            int i = s.IndexOf(sep, StringComparison.Ordinal);
+            if (i > 0 && (cut < 0 || i < cut)) cut = i;
+        }
+        if (cut > 0) s = s.Substring(0, cut);
+        // إزالة اختصار لوحة المفاتيح في آخر النص: (F2) (F10) (Ctrl+P)
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*\((?:F\d{1,2}|Ctrl\+[A-Za-z])\)\s*$", "");
+        s = s.Trim();
+        return s.Length >= 2 ? s : label;
+    }
+
     private Button AddBtn(string label, string style, RoutedEventHandler h, string tooltip = null, string requiresOp = null)
     {
+        // §B106.1 — تقصير مركزي: كانت الشاشات تمرّر جملاً كاملة نصاً للزر
+        // («حفظ أمر الاستلام — يبقى السند أمامك كما هو (F10)») فيتضخم الزر
+        // ويختل الشريط. الشرح ينتمي للتلميح لا لوجه الزر. نأخذ ما قبل أول
+        // فاصل شرح (— أو : أو قوس اختصار)، والنص الكامل يذهب للتلميح.
+        string full = label ?? "";
+        string shortLabel = ShortLabel(full);
+
         var b = new Button
         {
-            Content = label,
+            Content = shortLabel,
             Style = (Style)System.Windows.Application.Current.FindResource(style),
-            ToolTip = tooltip ?? label,
+            ToolTip = tooltip ?? (shortLabel != full ? full : label),
             Margin = new Thickness(3, 2, 3, 2),
             // §B106: عرض أدنى موحّد — كان كل زر يأخذ عرض نصه فقط، فيظهر «حذف» قزماً
             // بجانب «إلغاء الاعتماد». الحد الأدنى يُسوّي القِصار دون قصّ الطوال.
