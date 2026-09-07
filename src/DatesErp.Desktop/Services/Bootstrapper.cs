@@ -179,7 +179,16 @@ public class Bootstrapper
                     catch (Exception exR) { ErrorLog.Write(exR, "UpgradeReferenceData"); }
 
                     // التحقق من توافق إصدار قاعدة البيانات (§31)
-                    var dbVersion = db.DbVersions.OrderByDescending(v => v.Id).FirstOrDefault()?.VersionNumber;
+                    // §B106.1 — إصلاح خلل دائري: كانت البوابة تقرأ **آخر صف** في DbVersions،
+                    // وهو غالباً «ختم إقلاع» يكتبه التطبيق نفسه بنسخته (IsMigration = false).
+                    // فصارت تقارن نسخة التطبيق الحالية بنسخة آخر تشغيل — أي تحجب النظام
+                    // كلما تغيّر رقم الإصدار ولو لم يتغيّر المخطط حرفاً واحداً.
+                    // (ظهر عملياً: قاعدة مختومة 1.50.0 مُنعت بعد إرجاع الإصدار إلى 1.49.0.)
+                    // الصواب: البوابة تخص **المخطط**، فتقرأ سجلات الترحيل فقط (IsMigration).
+                    // أختام الإقلاع تبقى سجل تدقيق لا معياراً للتوافق.
+                    var dbVersion = db.DbVersions.Where(v => v.IsMigration)
+                        .OrderByDescending(v => v.Id).FirstOrDefault()?.VersionNumber;
+                    var lastStamp = db.DbVersions.OrderByDescending(v => v.Id).FirstOrDefault()?.VersionNumber;
                     // §B84/H6: خط الأساس القديم "1.0.x" = مخطط ما قبل الترقيم الموحد — متوافق بالتعريف
                     // (المهاجر أعلاه رفعه للهيكل الحالي). أي إصدار لاحق يُقارن رئيسي.ثانوي بجدية.
                     bool legacyBaseline = dbVersion != null && dbVersion.StartsWith("1.0.");
@@ -195,7 +204,7 @@ public class Bootstrapper
                     }
                     // §B84/H6: ختم الترقية — صف تدقيق بنسخة التطبيق بعد نجاح الفحص (مرة لكل نسخة)،
                     // فيصبح لجدول DbVersions معنى: تاريخ النسخ التي عملت على هذه القاعدة.
-                    if (dbVersion != AppVersion)
+                    if (lastStamp != AppVersion)
                     {
                         db.DbVersions.Add(new DatesErp.Core.Domain.Entities.DbVersion
                         {

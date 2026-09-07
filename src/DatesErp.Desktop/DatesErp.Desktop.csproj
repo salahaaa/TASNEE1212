@@ -10,7 +10,7 @@
     <AssemblyName>DateERP</AssemblyName>
     <RootNamespace>DatesErp.Desktop</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.49.0</Version>
+    <Version>1.50.0</Version>
     <Authors>شركة التمور</Authors>
     <Product>Date ERP — نظام إدارة وتصنيع التمور</Product>
     <Description>نظام سطح مكتب احترافي متعدد المستخدمين لإدارة وتصنيع التمور</Description>
