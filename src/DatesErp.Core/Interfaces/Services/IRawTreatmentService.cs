@@ -25,7 +25,8 @@ public interface IRawTreatmentService
     /// الإفراج بعد اكتمال المدة — **كلي أو جزئي** (500 من 1,000). الكمية تعود من
     /// مستودع المعالجة إلى الخام وتصبح متاحة للإنتاج.
     /// </summary>
-    OpResult Release(int treatmentId, double qtyKg, string notes = null);
+    /// <summary>§B106: وجهة الإفراج — "WRM" مخزن الخام (افتراضي) أو "WFG" مخزن التام.</summary>
+    OpResult Release(int treatmentId, double qtyKg, string notes = null, string destWarehouseCode = "WRM");
 
     /// <summary>رفض كمية فاشلة: تخرج من مستودع المعالجة إلى الهدر ولا تعود للخام.</summary>
     OpResult Reject(int treatmentId, double qtyKg, string reason);

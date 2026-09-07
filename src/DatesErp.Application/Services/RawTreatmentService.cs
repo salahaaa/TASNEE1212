@@ -98,11 +98,25 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
 
     // ═══════════════════ الإفراج ═══════════════════
 
-    public OpResult Release(int treatmentId, double qtyKg, string notes = null)
+    /// <summary>
+    /// الإفراج عن كمية من المعالجة إلى وجهتها.
+    /// §B106: كانت الوجهة **مخزن الخام إجباراً**. صارت قابلة للاختيار (قرار المستخدم:
+    /// «ثم تخرج لمخزن التام أو لخط الإنتاج مباشرة»):
+    ///   • <c>"WRM"</c> — مخزن الخام (الافتراضي، وهو السلوك السابق).
+    ///   • <c>"WFG"</c> — مخزن التام مباشرة، للبضاعة التي لا تمر بخط الإنتاج.
+    /// الصرف المباشر لخط الإنتاج يمر بأمر إنتاج (صرف المواد) ولا يُقيَّد كحركة مخزن هنا.
+    /// </summary>
+    public OpResult Release(int treatmentId, double qtyKg, string notes = null, string destWarehouseCode = "WRM")
     {
         Require(Module, "Approve");
         var t = Db.RawTreatments.FirstOrDefault(x => x.Id == treatmentId);
         if (t == null) return OpResult.Fail("عملية المعالجة غير موجودة.");
+
+        // §الوجهة محصورة في مخزنين معلومين — لا يُمرَّر كود حر إلى حركة مخزون.
+        string dest = string.IsNullOrWhiteSpace(destWarehouseCode) ? "WRM" : destWarehouseCode.Trim().ToUpperInvariant();
+        if (dest != "WRM" && dest != "WFG")
+            return OpResult.Fail("وجهة الإفراج غير صالحة — المسموح: مخزن الخام (WRM) أو مخزن التام (WFG).");
+
 
         return RunOp(() =>
         {
@@ -138,12 +152,15 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
 
             MoveStock(WarehouseId("WTRT"), MovementType.Outbound, t, ReferenceDocType.TreatmentRelease,
                 refNo, qtyKg, packages, lot, notes ?? $"إفراج من معالجة {t.TreatmentNo}");
-            MoveStock(WarehouseId("WRM"), MovementType.Inbound, t, ReferenceDocType.TreatmentRelease,
-                refNo, qtyKg, packages, lot, notes ?? $"إفراج من معالجة {t.TreatmentNo}");
+            MoveStock(WarehouseId(dest), MovementType.Inbound, t, ReferenceDocType.TreatmentRelease,
+                refNo, qtyKg, packages, lot,
+                notes ?? $"إفراج من معالجة {t.TreatmentNo} إلى {(dest == "WFG" ? "مخزن التام" : "مخزن الخام")}");
 
             t.ReleasedQtyKg += qtyKg;
             lot.UnderTreatmentQtyKg = Math.Max(0, lot.UnderTreatmentQtyKg - qtyKg);
-            lot.TreatmentReadyQtyKg += qtyKg;
+            // §B106: «جاهز للإنتاج» رصيدُ خامٍ متاح للتصنيع. فإن خرجت الكمية إلى مخزن
+            // التام مباشرةً فهي لم تعد خاماً متاحاً، وزيادته هنا كانت ستحتسبها مرتين.
+            if (dest == "WRM") lot.TreatmentReadyQtyKg += qtyKg;
 
             bool finished = t.RemainingQtyKg <= 0.001;
             if (finished)

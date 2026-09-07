@@ -111,6 +111,28 @@ public static class DbSeeder
                 new TreatmentType { TypeCode = "TRT-HEAT", TypeNameAr = "تعقيم حراري", DefaultDurationHours = 6, RequiresQualityCheck = true },
                 new TreatmentType { TypeCode = "TRT-FRZ", TypeNameAr = "تجميد", DefaultDurationHours = 168, RequiresQualityCheck = false },
                 new TreatmentType { TypeCode = "TRT-FUM", TypeNameAr = "تبخير", DefaultDurationHours = 72, RequiresQualityCheck = true });
+
+        // §B106 — المدة تتبع **درجة الإصابة** لا تقنية المعالجة (قرار المستخدم):
+        //   خفيفة 5 أيام · متوسطة 7 أيام · شديدة 10 أيام.
+        // تُبذر صفاً صفاً بنمط «إن لم يوجد» كي تصل القواعدَ القائمة أيضاً — لا داخل
+        // شرط !Any() أعلاه، فذاك لا يمر إلا على قاعدة جديدة تماماً.
+        foreach (var (code, name, hours) in new[]
+                 {
+                     ("TRT-INF-L", "إصابة خفيفة — 5 أيام",  120d),
+                     ("TRT-INF-M", "إصابة متوسطة — 7 أيام", 168d),
+                     ("TRT-INF-H", "إصابة شديدة — 10 أيام", 240d),
+                 })
+        {
+            if (!db.TreatmentTypes.Any(t => t.TypeCode == code))
+                db.TreatmentTypes.Add(new TreatmentType
+                {
+                    TypeCode = code,
+                    TypeNameAr = name,
+                    DefaultDurationHours = hours,
+                    RequiresQualityCheck = true   // الإفراج بعد الإصابة يستوجب فحصاً معتمداً
+                });
+        }
+
         var bk = db.PackagingTypes.FirstOrDefault(x => x.PackageCode == "BK20");
         var basketEmpty = db.Products.FirstOrDefault(x => x.ProductCode == "004-002");
         if (bk != null && basketEmpty != null) basketEmpty.SourcePackagingTypeId = bk.Id;
