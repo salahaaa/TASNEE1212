@@ -128,7 +128,7 @@ public class ErpToolbar : WrapPanel
         if (string.IsNullOrWhiteSpace(label)) return label;
         string s = label;
         int cut = -1;
-        foreach (var sep in new[] { " — ", " – ", ": ", " - " })
+        foreach (var sep in new[] { " — ", " – ", ": ", " - ", " / " })
         {
             int i = s.IndexOf(sep, StringComparison.Ordinal);
             if (i > 0 && (cut < 0 || i < cut)) cut = i;

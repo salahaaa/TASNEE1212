@@ -1089,10 +1089,20 @@ public partial class PlanningView : UserControl
             if (plan.ShiftId != null) { int si = _shiftIds.IndexOf(plan.ShiftId.Value); if (si >= 0) ShiftBox.SelectedIndex = si; }
             if (plan.LineId != null) { int li = _lineIds.IndexOf(plan.LineId.Value); if (li >= 0) LineBox.SelectedIndex = li; }
             // §B75: استعادة نطاق التخطيط والعميل المحدد من الرأس
-            if (plan.ScopeMode == "Single") SingleRadio.IsChecked = true; else MultiRadio.IsChecked = true;
-            if (plan.SingleCustomerId != null)
-                for (int ci = 0; ci < SingleCustBox.Items.Count; ci++)
-                    if ((SingleCustBox.Items[ci] as DatesErp.Core.Domain.Entities.Customer)?.Id == plan.SingleCustomerId) { SingleCustBox.SelectedIndex = ci; break; }
+            // §B106.2 — الحارس _programmaticScope كان يُفعَّل لاحقاً في هذه الدالة فقط،
+            // بينما إسنادُ SingleCustBox.SelectedIndex هنا يُطلق SelectionChanged فوراً،
+            // فيستدعي SingleCust_Changed -> OpenLotsEditor: تُفتح نافذة «أصناف وشحنات
+            // العميل» فوق الخطة بمجرد النقر المزدوج عليها لعرضها. الفتح استعراضٌ لا
+            // إدخال، فالحارس يلزم حول الإسناد نفسه.
+            _programmaticScope = true;
+            try
+            {
+                if (plan.ScopeMode == "Single") SingleRadio.IsChecked = true; else MultiRadio.IsChecked = true;
+                if (plan.SingleCustomerId != null)
+                    for (int ci = 0; ci < SingleCustBox.Items.Count; ci++)
+                        if ((SingleCustBox.Items[ci] as DatesErp.Core.Domain.Entities.Customer)?.Id == plan.SingleCustomerId) { SingleCustBox.SelectedIndex = ci; break; }
+            }
+            finally { _programmaticScope = false; }
             FillPlanMeta();
 
             _rows.Clear();
