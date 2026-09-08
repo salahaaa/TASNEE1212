@@ -196,7 +196,13 @@
             </Border>
 
             <!-- ٦) حالة الأيام وتقدم العملاء -->
-            <Border Grid.Row="6" Style="{StaticResource WhiteCard}" Margin="0,0,0,6">
+            <!-- §B106.2 — لوحات «بنود اليوم» و«حالة أيام الخطة» و«تقدم كل عميل» أُخفيت
+                 بطلب المستخدم: تبقى شاشة واحدة = بطاقة الخطة + بنودها + الخطط المحفوظة.
+                 أُخفيت ولم تُحذف: عناصرها (DailyGrid/DaysGrid/CustomersProgGrid/
+                 DailyDateBox/EditRowBtn) مرجوعة في عشرات المواضع بالكود الخلفي،
+                 وحذف الترميز يكسر البناء. الإخفاء يحقق المطلوب بصرياً بلا مخاطرة،
+                 ويسمح بإعادتها لاحقاً بتغيير Visibility فقط. -->
+            <Border x:Name="DailyPanelsCard" Visibility="Collapsed" Grid.Row="6" Style="{StaticResource WhiteCard}" Margin="0,0,0,6">
                 <StackPanel>
                     <WrapPanel Margin="0,0,0,4">
                         <TextBlock Text="📅 اليوم:" FontWeight="Bold" FontSize="11.5" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,6,0"/>
