@@ -81,7 +81,7 @@
                         <Button x:Name="AddItemBtn" Content="➕ إضافة البند" Style="{StaticResource ErpPrimaryButton}" VerticalAlignment="Bottom" Click="AddItem_Click"/>
                     </WrapPanel>
 
-                    <DataGrid x:Name="ItemsGrid" Height="118" RowHeight="30" FontSize="13.5" Margin="0,8,0,0">
+                    <DataGrid x:Name="ItemsGrid" Height="118" RowHeight="30" FontSize="13.5" Margin="0,8,0,0" CellEditEnding="ItemsGrid_CellEditEnding">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="م" Binding="{Binding RowNo}" Width="42" IsReadOnly="True"/>
                             <DataGridTextColumn Header="رقم الصنف" Binding="{Binding ProductCode}" Width="105" IsReadOnly="True"/>
@@ -91,6 +91,45 @@
                             <DataGridTextColumn Header="العدد" Binding="{Binding PackageCount}" Width="80" IsReadOnly="True"/>
                             <DataGridTextColumn Header="وزن العبوة (كجم)" Binding="{Binding UnitWeightKg}" Width="115" IsReadOnly="True"/>
                             <DataGridTextColumn Header="الإجمالي (كجم)" Binding="{Binding QtyKg}" Width="110" IsReadOnly="True"/>
+                            <!-- §B107 — يحتاج معالجة: يُقرأ من بطاقة الصنف (Product.RequiresTreatment) ولا يُحرَّر هنا -->
+                            <DataGridTextColumn Header="يحتاج معالجة" Binding="{Binding RequiresTreatmentAr}" Width="95" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="HorizontalAlignment" Value="Center"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding RequiresTreatment}" Value="True">
+                                                <Setter Property="Foreground" Value="#B45309"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding RequiresTreatment}" Value="False">
+                                                <Setter Property="Foreground" Value="#6B7280"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <!-- §B107 — الوجهة: مخزن الخام أم مستودع المعالجة (تبدأ المعالجة تلقائياً عند الاعتماد) -->
+                            <DataGridComboBoxColumn Header="الوجهة" SelectedItemBinding="{Binding DestinationAr, UpdateSourceTrigger=PropertyChanged}" Width="150">
+                                <DataGridComboBoxColumn.ItemsSource>
+                                    <x:Array Type="sys:String">
+                                        <sys:String>مخزن الخام</sys:String>
+                                        <sys:String>مستودع المعالجة</sys:String>
+                                    </x:Array>
+                                </DataGridComboBoxColumn.ItemsSource>
+                            </DataGridComboBoxColumn>
+                            <!-- §B107 — تقسيم كمية البند لأجزاء بدرجات إصابة مختلفة (5/7/10 أيام) بلا صنف جديد -->
+                            <DataGridTemplateColumn Header="درجات الإصابة (تقسيم الكمية)" Width="230">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DockPanel LastChildFill="True">
+                                            <Button DockPanel.Dock="Left" Content="🧪 تقسيم" Padding="6,0" Style="{StaticResource ErpButton}"
+                                                    Click="SplitParts_Click" Tag="{Binding}"
+                                                    ToolTip="تقسيم كمية هذا البند إلى أجزاء بدرجات إصابة مختلفة — خفيفة 5 أيام · متوسطة 7 · شديدة 10 (بلا صنف جديد)"/>
+                                            <TextBlock Text="{Binding PartsSummary}" FontSize="11" Foreground="#0A246A" VerticalAlignment="Center" Margin="6,0,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridComboBoxColumn Header="حالة البند (جزئي)" SelectedItemBinding="{Binding Status, UpdateSourceTrigger=PropertyChanged}" Width="120">
                                 <DataGridComboBoxColumn.ItemsSource>
                                     <x:Array Type="sys:String">

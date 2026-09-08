@@ -31,6 +31,29 @@ public class ShipmentItemDto
     public string ReceiptUnit { get; set; }
     /// <summary>§استلام جزئي: Received مستلم | Rejected مرفوض/تالف | Pending معلّق لاحقاً.</summary>
     public string ItemStatus { get; set; } = "Received";
+
+    /// <summary>
+    /// §B107 — وجهة البند: "WRM" مخزن الخام (افتراضي) أو "WTRT" مستودع المعالجة.
+    /// عند "WTRT" تبدأ المعالجة **تلقائياً** لحظة اعتماد السند.
+    /// </summary>
+    public string Destination { get; set; } = ReceiptDestinations.RawStore;
+
+    /// <summary>
+    /// §B107 — تقسيم كمية هذا البند إلى أجزاء بدرجات إصابة مختلفة (5/7/10 أيام) بلا صنف جديد.
+    /// فارغة مع وجهة المعالجة = الكمية كلها بدرجة واحدة (المتوسطة افتراضاً).
+    /// </summary>
+    public List<TreatmentPartDto> TreatmentParts { get; set; } = new();
+}
+
+/// <summary>§B107 — جزء من كمية بند استلام بدرجة إصابة واحدة (Light 5 · Medium 7 · High 10 أيام).</summary>
+public class TreatmentPartDto
+{
+    public string InfestationLevel { get; set; } = InfestationLevels.Medium;
+    public double QtyKg { get; set; }
+    public int PackageCount { get; set; }
+    /// <summary>تجاوز يدوي للمدة بالساعات — فارغ = مدة الدرجة الافتراضية.</summary>
+    public double? DurationHours { get; set; }
+    public string Notes { get; set; }
 }
 
 /// <summary>بند خطة إنتاج.</summary>

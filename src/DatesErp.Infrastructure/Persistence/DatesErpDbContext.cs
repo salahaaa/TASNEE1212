@@ -35,6 +35,8 @@ public class DatesErpDbContext : DbContext
     // ── الاستلام والدفعات ──
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<ShipmentItem> ShipmentItems => Set<ShipmentItem>();
+    /// <summary>§B107 — أجزاء بند الاستلام بدرجات إصابة مختلفة (5/7/10 أيام) بلا صنف جديد.</summary>
+    public DbSet<ShipmentItemTreatmentPart> ShipmentItemTreatmentParts => Set<ShipmentItemTreatmentPart>();
     public DbSet<Lot> Lots => Set<Lot>();
 
     // ── المعالجة والتعقيم ──
@@ -179,6 +181,9 @@ public class DatesErpDbContext : DbContext
         b.Entity<Shipment>().HasMany(s => s.Items).WithOne().HasForeignKey(i => i.ShipmentId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Shipment>().HasMany(s => s.Lots).WithOne().HasForeignKey(l => l.ShipmentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Shipment>().HasIndex(s => s.DocumentNumber).IsUnique();
+        // §B107 — أجزاء درجات الإصابة داخل البند الواحد (بلا صنف جديد)
+        b.Entity<ShipmentItem>().HasMany(i => i.TreatmentParts).WithOne()
+            .HasForeignKey(p => p.ShipmentItemId).OnDelete(DeleteBehavior.Cascade);
 
         // ── التخطيط ──
         b.Entity<ProductionPlan>().HasMany(p => p.Items).WithOne().HasForeignKey(i => i.PlanId).OnDelete(DeleteBehavior.Cascade);

@@ -46,47 +46,12 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
                 : null;
 
             double hours = dto.DurationHours ?? type?.DefaultDurationHours ?? 0;
-            if (hours <= 0)
-                throw new DomainException("مدة المعالجة غير محددة — أدخلها أو اختر نوع معالجة له مدة افتراضية.");
-
-            // §الكمية القابلة للإدخال في معالجة = المخزون − ما هو تحت المعالجة الآن − المحجوز
-            // للخطط. طرح المحجوز مقصود: لو أُدخلت كمية محجوزة لخطة معتمدة إلى المعالجة
-            // لتعطّلت خطة قائمة بلا إنذار — والخطة المعتمدة التزام قائم لا يُنقض ضمناً.
-            double eligible = lot.InStockQtyKg - lot.UnderTreatmentQtyKg - lot.ReservedQtyKg;
-            if (dto.QtyKg > eligible + 0.001)
-                throw new DomainException(
-                    $"الكمية المطلوبة ({dto.QtyKg:N1} كجم) تتجاوز المتاح للمعالجة في الدفعة {lot.LotCode}.\n"
-                    + $"المخزون: {lot.InStockQtyKg:N1} — تحت المعالجة: {lot.UnderTreatmentQtyKg:N1} "
-                    + $"— المحجوز لخطط: {lot.ReservedQtyKg:N1} — القابل للإدخال: {Math.Max(0, eligible):N1} كجم");
-
             var startedAt = dto.StartedAt ?? DateTime.Now;
-            var t = new RawTreatment
-            {
-                TreatmentNo = Numbering.Next("TRT"),
-                LotId = lot.Id,
-                ProductId = lot.ProductId,           // §لا صنف جديد: يُنسخ من الدفعة كما هو
-                TreatmentTypeId = dto.TreatmentTypeId,
-                QtyKg = dto.QtyKg,
-                PackageCount = dto.PackageCount,
-                StartedAt = startedAt,
-                DurationHours = hours,
-                ExpectedReadyAt = startedAt.AddHours(hours),   // §يُحسب تلقائياً
-                ResponsibleUserId = dto.ResponsibleUserId ?? Session?.UserId,
-                Notes = dto.Notes,
-                Status = TreatmentStatuses.InProgress
-            };
-            Db.RawTreatments.Add(t);
-            Db.SaveChanges(); // للحصول على المعرف قبل قيد الحركة
 
-            // §حركة المخزون: خروج من الخام ودخول إلى مستودع المعالجة — بنفس الكمية
-            MoveStock(WarehouseId("WRM"), MovementType.Outbound, t, ReferenceDocType.TreatmentStart,
-                t.TreatmentNo, dto.QtyKg, dto.PackageCount, lot, $"بدء معالجة {t.TreatmentNo}");
-            MoveStock(WarehouseId("WTRT"), MovementType.Inbound, t, ReferenceDocType.TreatmentStart,
-                t.TreatmentNo, dto.QtyKg, dto.PackageCount, lot, $"بدء معالجة {t.TreatmentNo}");
-
-            // §InStockQtyKg لا يتغير — الكمية انتقلت بين مستودعين ولم تغادر المنشأة
-            lot.UnderTreatmentQtyKg += dto.QtyKg;
-            Db.SaveChanges();
+            // §B107 — الجوهر المشترك في ServiceBase: نفس المنطق الذي يستدعيه اعتماد
+            // سند الاستلام حين تكون وجهة البند «مستودع المعالجة». نسخة واحدة لا نسختان.
+            var t = StartTreatmentCore(lot, dto.TreatmentTypeId, dto.QtyKg, dto.PackageCount,
+                startedAt, hours, dto.ResponsibleUserId, dto.Notes);
 
             return OpResult.Success(
                 $"بدأت المعالجة على {dto.QtyKg:N1} كجم من الدفعة {lot.LotCode}.\n"

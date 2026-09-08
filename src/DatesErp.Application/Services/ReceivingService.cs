@@ -29,6 +29,12 @@ public class ReceivingService : ServiceBase, IReceivingService
                 ship = Db.Shipments.Include(x => x.Items).FirstOrDefault(x => x.Id == existingId)
                        ?? throw new DomainException("أمر الاستلام غير موجود.");
                 if (ship.IsApproved) throw new DomainException("أمر الاستلام معتمد — ألغِ الاعتماد أولاً للتعديل.");
+                // §B107 — تُحذف أجزاء درجات الإصابة صراحةً مع بنودها. الحذف المتتالي
+                // معرَّف في النموذج، لكن التصريح به هنا يحمي قواعد قديمة أُنشئ فيها
+                // الجدول بالترحيل الآمن بلا قيد أجنبي.
+                var oldItemIds = ship.Items.Select(i => i.Id).ToList();
+                Db.ShipmentItemTreatmentParts.RemoveRange(
+                    Db.ShipmentItemTreatmentParts.Where(p => oldItemIds.Contains(p.ShipmentItemId)));
                 Db.ShipmentItems.RemoveRange(ship.Items);
                 ship.Items.Clear();
             }
@@ -62,7 +68,17 @@ public class ReceivingService : ServiceBase, IReceivingService
 
                 var qty = it.QtyKg > 0 ? it.QtyKg : it.PackageCount * it.UnitWeightKg;
                 if (qty <= 0) throw new DomainException("كمية غير صالحة في أحد البنود.");
-                ship.Items.Add(new ShipmentItem
+
+                // §B107 — الوجهة: مخزن الخام أم مستودع المعالجة. تُوحَّد هنا فلا يصل
+                // كود حر إلى حركة مخزون، والفارغ = مخزن الخام (سلوك كل السندات القائمة).
+                var dest = ReceiptDestinations.Normalize(it.Destination);
+                if (dest == ReceiptDestinations.Treatment && !prod.RequiresTreatment)
+                    throw new DomainException(
+                        $"الصنف «{prod.ProductNameAr}» غير معلَّم بأنه «يحتاج معالجة» في بطاقة الأصناف،\n"
+                        + "فلا يجوز توجيهه إلى مستودع المعالجة. فعّل العلم في بطاقة الصنف أو وجّه البند لمخزن الخام.",
+                        "NOT_TREATABLE");
+
+                var newItem = new ShipmentItem
                 {
                     ProductId = it.ProductId,
                     PackagingTypeId = it.PackagingTypeId,
@@ -80,8 +96,14 @@ public class ReceivingService : ServiceBase, IReceivingService
                            ?? Db.Products.AsNoTracking().Where(k => k.Id == it.ProductId)
                                .Select(k => k.UnitOfMeasure).FirstOrDefault()
                            ?? UnitsPolicy.UnitKg),
-                    Status = string.IsNullOrWhiteSpace(it.ItemStatus) ? "Received" : it.ItemStatus
-                });
+                    Status = string.IsNullOrWhiteSpace(it.ItemStatus) ? "Received" : it.ItemStatus,
+                    Destination = dest
+                };
+                ship.Items.Add(newItem);
+
+                // §B107 — تقسيم كمية البند الواحد لأجزاء بدرجات إصابة مختلفة (5/7/10 أيام)
+                // **بلا صنف جديد**: كل جزء يصير صف RawTreatment مستقلاً على نفس الدفعة عند الاعتماد.
+                BuildTreatmentParts(newItem, it, dest, qty);
             }
             ship.TotalWeightKg = ship.Items.Sum(i => i.TotalWeightKg);
             ship.TotalCartons = ship.Items.Sum(i => i.PackageCount);
@@ -89,6 +111,70 @@ public class ReceivingService : ServiceBase, IReceivingService
             Db.SaveChanges();
             return OpResult.Success(existingId != null ? "تم حفظ التعديلات على سند الاستلام." : "تم حفظ أمر الاستلام بنجاح.", ship.Id, ship.DocumentNumber);
         });
+    }
+
+    /// <summary>
+    /// §B107 — يبني أجزاء درجات الإصابة لبند واحد ويتحقق من اتساقها مع كمية البند.
+    ///
+    /// • وجهة مخزن الخام ← لا أجزاء إطلاقاً (وأي أجزاء واردة تُهمل، فهي بلا معنى هناك).
+    /// • وجهة المعالجة بلا أجزاء ← جزء واحد ضمني بكامل الكمية بدرجة متوسطة (7 أيام)،
+    ///   كي لا يُجبر أمين المخزن على تقسيم بضاعة متجانسة.
+    /// • مجموع الأجزاء يجب أن يساوي كمية البند بالضبط — وإلا اختل ثابت التوازن بين
+    ///   مخزن الخام ومستودع المعالجة لحظة الاعتماد.
+    /// </summary>
+    private void BuildTreatmentParts(ShipmentItem newItem, ShipmentItemDto it, string dest, double qty)
+    {
+        if (dest != ReceiptDestinations.Treatment) return;
+
+        var src = (it.TreatmentParts ?? new List<TreatmentPartDto>())
+            .Where(p => p != null && p.QtyKg > 0).ToList();
+
+        if (src.Count == 0)
+            src.Add(new TreatmentPartDto
+            {
+                InfestationLevel = InfestationLevels.Medium,
+                QtyKg = qty,
+                PackageCount = it.PackageCount
+            });
+
+        double sum = src.Sum(p => p.QtyKg);
+        if (Math.Abs(sum - qty) > 0.001)
+            throw new DomainException(
+                $"مجموع أجزاء درجات الإصابة ({sum:N1} كجم) لا يساوي كمية البند ({qty:N1} كجم).\n"
+                + "صحّح الأجزاء — الفرق يعني كميةً لا يعرف النظام أين تذهب.", "PARTS_MISMATCH");
+
+        // §أنواع المعالجة المبذورة في B106 تُقرأ مرة واحدة لكل بند (لا استعلام داخل حلقة)
+        var typeByCode = Db.TreatmentTypes.AsNoTracking()
+            .Where(t => t.IsActive)
+            .ToDictionary(t => t.TypeCode, t => new { t.Id, t.DefaultDurationHours });
+
+        int packagesLeft = it.PackageCount;
+        for (int i = 0; i < src.Count; i++)
+        {
+            var p = src[i];
+            var level = InfestationLevels.Normalize(p.InfestationLevel);
+            var code = InfestationLevels.TypeCode(level);
+            typeByCode.TryGetValue(code, out var type);
+
+            // §الطرود بنسبة الكمية حين لا يحددها المستخدم — والآخر يأخذ الباقي فلا يضيع طرد بالتقريب
+            int packages = p.PackageCount > 0
+                ? p.PackageCount
+                : (i == src.Count - 1
+                    ? Math.Max(0, packagesLeft)
+                    : (qty <= 0 ? 0 : (int)Math.Round(it.PackageCount * (p.QtyKg / qty), MidpointRounding.AwayFromZero)));
+            packagesLeft -= packages;
+
+            newItem.TreatmentParts.Add(new ShipmentItemTreatmentPart
+            {
+                InfestationLevel = level,
+                TreatmentTypeId = type?.Id,
+                QtyKg = p.QtyKg,
+                PackageCount = Math.Max(0, packages),
+                // §المدة تُثبَّت على درجة الإصابة لا على تقنية المعالجة (فجوة B106 §9①)
+                DurationHours = p.DurationHours ?? type?.DefaultDurationHours ?? InfestationLevels.DefaultHours(level),
+                Notes = p.Notes
+            });
+        }
     }
 
     /// <summary>§كشف تكرار رقم الحاوية: سندات سابقة بنفس الرقم (تحذير قبل الحفظ).</summary>
@@ -140,6 +226,8 @@ public class ReceivingService : ServiceBase, IReceivingService
         {
             // §المخازن المتعددة: مخزن الاستلام المختار في السند — أو الافتراضي WRM للسندات القديمة
             var whRaw = ship.ReceivingWarehouseId ?? WarehouseId("WRM");
+            // §B107 — عدّاد المعالجات التي بدأت تلقائياً، ليعرف الموظف ما حدث في رسالة واحدة
+            int startedCount = 0; double startedQty = 0;
             foreach (var item in receivedItems)
             {
                 var lot = new Lot
@@ -163,6 +251,49 @@ public class ReceivingService : ServiceBase, IReceivingService
                     packagingTypeId: item.PackagingTypeId,
                     notes: $"استلام شحنة {ship.DocumentNumber}");
                 item.Status = DocStatuses.Approved;
+
+                // §B107 — **بدء المعالجة تلقائياً عند اعتماد السند**.
+                // الترتيب مقصود: تُقيَّد الكمية أولاً وارداً في مخزن الخام ثم تُنقل منه إلى
+                // مستودع المعالجة. فالتتبع يبقى كاملاً (استلام ← معالجة) ويبقى ثابت التوازن
+                // رصيد(الخام) + رصيد(WTRT) = InStockQtyKg صحيحاً في كل لحظة.
+                if (ReceiptDestinations.IsTreatment(item.Destination))
+                {
+                    var parts = Db.ShipmentItemTreatmentParts.Where(p => p.ShipmentItemId == item.Id).ToList();
+                    if (parts.Count == 0)
+                        parts.Add(new ShipmentItemTreatmentPart
+                        {
+                            InfestationLevel = InfestationLevels.Medium,
+                            QtyKg = item.TotalWeightKg,
+                            PackageCount = item.PackageCount,
+                            DurationHours = InfestationLevels.DefaultHours(InfestationLevels.Medium)
+                        });
+
+                    // §وقت البدء = لحظة الاعتماد، لا تاريخ الاستلام المُدخل. لو أُخذ الأخير
+                    // لأمكن اعتماد سند بتاريخ قديم فتخرج البضاعة «جاهزة» فوراً بلا معالجة فعلية.
+                    var startAt = DateTime.Now;
+                    foreach (var part in parts)
+                    {
+                        var typeId = part.TreatmentTypeId ?? Db.TreatmentTypes
+                            .Where(t => t.TypeCode == InfestationLevels.TypeCode(part.InfestationLevel))
+                            .Select(t => (int?)t.Id).FirstOrDefault();
+                        double hours = part.DurationHours
+                            ?? Db.TreatmentTypes.Where(t => t.Id == typeId)
+                                 .Select(t => (double?)t.DefaultDurationHours).FirstOrDefault()
+                            ?? InfestationLevels.DefaultHours(part.InfestationLevel);
+
+                        // §لا فحص أهلية: الدفعة أُنشئت للتو من كمية هذا البند بعينه،
+                        // فالكمية مضمونة بحكم مصدرها ولا مخزون سابقاً يُقارن به.
+                        StartTreatmentCore(lot, typeId, part.QtyKg, part.PackageCount,
+                            startAt, hours, ship.ReceivedBy ?? Session?.UserId,
+                            $"بدء تلقائي من اعتماد سند الاستلام {ship.DocumentNumber} — "
+                            + $"{InfestationLevels.ToArabic(part.InfestationLevel)}"
+                            + (string.IsNullOrWhiteSpace(part.Notes) ? "" : $" · {part.Notes}"),
+                            checkEligibility: false, sourceWarehouseId: whRaw);
+
+                        startedCount++;
+                        startedQty += part.QtyKg;
+                    }
+                }
             }
             ship.IsApproved = true;
             ship.Status = DocStatuses.Approved;
@@ -173,7 +304,10 @@ public class ReceivingService : ServiceBase, IReceivingService
             var rejCount = ship.Items.Count(i => i.Status == "Rejected");
             return OpResult.Success($"تم اعتماد الاستلام وإنشاء {receivedItems.Count} دفعة تلقائياً."
                 + (pendingCount > 0 ? $" تبقّى {pendingCount} بنداً معلّقاً لاستلام لاحق." : "")
-                + (rejCount > 0 ? $" رُفض {rejCount} بنداً." : ""), ship.Id, ship.DocumentNumber);
+                + (rejCount > 0 ? $" رُفض {rejCount} بنداً." : "")
+                + (startedCount > 0
+                    ? $"\n🧪 بدأت {startedCount} عملية معالجة تلقائياً على {startedQty:N1} كجم — تابعها من شاشة «معالجة وتعقيم الخام»."
+                    : ""), ship.Id, ship.DocumentNumber);
         });
     }
 
@@ -191,6 +325,14 @@ public class ReceivingService : ServiceBase, IReceivingService
             {
                 if (lot.ProducedQtyKg > 0 || lot.DeliveredQtyKg > 0)
                     throw new DomainException($"لا يمكن إلغاء الاستلام: الدفعة {lot.LotCode} استُهلك منها بالفعل.");
+                // §B107 — الاعتماد قد يكون بدأ معالجةً تلقائياً، فالكمية غادرت مخزن الخام
+                // إلى WTRT. عكسُ الاستلام هنا كان سيُنقص رصيداً لم يعد موجوداً ويكسر
+                // ثابت التوازن. الإلغاء يمر بإلغاء المعالجة أولاً — فعل بشري موثّق.
+                if (lot.UnderTreatmentQtyKg > 0.001 || Db.RawTreatments.Any(t => t.LotId == lot.Id))
+                    throw new DomainException(
+                        $"لا يمكن إلغاء الاستلام: الدفعة {lot.LotCode} دخلت دورة المعالجة والتعقيم.\n"
+                        + "ألغِ عمليات المعالجة المرتبطة بها من شاشة «معالجة وتعقيم الخام» أولاً.",
+                        "IN_TREATMENT");
                 // §تعكس الأرصدة من المخزن نفسه الذي قُيّدت فيه عند الاعتماد
                 var whRaw = ship.ReceivingWarehouseId ?? WarehouseId("WRM");
                 var balance = Db.StockBalances.FirstOrDefault(b => b.WarehouseId == whRaw && b.LotId == lot.Id);
@@ -234,7 +376,7 @@ public class ReceivingService : ServiceBase, IReceivingService
             foreach (var it in pend)
             {
                 it.Status = "Moved"; // انتقلت للسند اللاحق — تبقى للأثر التدقيقي
-                ship.Items.Add(new ShipmentItem
+                var moved = new ShipmentItem
                 {
                     ProductId = it.ProductId,
                     PackagingTypeId = it.PackagingTypeId,
@@ -242,8 +384,22 @@ public class ReceivingService : ServiceBase, IReceivingService
                     UnitWeightKg = it.UnitWeightKg,
                     TotalWeightKg = it.TotalWeightKg,
                     ReceiptUnit = it.ReceiptUnit,
-                    Status = "Received"
-                });
+                    Status = "Received",
+                    // §B107 — الوجهة تنتقل مع البند: البند المعلّق الموجَّه للمعالجة يظل كذلك
+                    Destination = ReceiptDestinations.Normalize(it.Destination)
+                };
+                // §B107 — وكذلك تقسيم درجات الإصابة، فلا يُعيد الموظف إدخاله في السند اللاحق
+                foreach (var part in Db.ShipmentItemTreatmentParts.AsNoTracking().Where(p => p.ShipmentItemId == it.Id))
+                    moved.TreatmentParts.Add(new ShipmentItemTreatmentPart
+                    {
+                        InfestationLevel = part.InfestationLevel,
+                        TreatmentTypeId = part.TreatmentTypeId,
+                        QtyKg = part.QtyKg,
+                        PackageCount = part.PackageCount,
+                        DurationHours = part.DurationHours,
+                        Notes = part.Notes
+                    });
+                ship.Items.Add(moved);
             }
             Db.Shipments.Add(ship);
             Db.SaveChanges();

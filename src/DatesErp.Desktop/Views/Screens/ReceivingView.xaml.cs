@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using DatesErp.Core.Domain.Entities;
 using DatesErp.Core.Interfaces.Services;
 using DatesErp.Desktop.Services;
 using DatesErp.Infrastructure.Persistence;
@@ -27,7 +28,33 @@ public partial class ReceivingView : UserControl
         public double QtyKg { get; set; }
         /// <summary>§استلام جزئي: مستلم | مرفوض/تالف | معلّق لاحقاً.</summary>
         public string Status { get; set; } = "مستلم";
+
+        /// <summary>§B107 — عمود «يحتاج معالجة» (نعم/لا) — يُقرأ من Product.RequiresTreatment ولا يُحرَّر هنا.</summary>
+        public bool RequiresTreatment { get; set; }
+        public string RequiresTreatmentAr => RequiresTreatment ? "نعم" : "لا";
+
+        /// <summary>§B107 — عمود الوجهة: «مخزن الخام» أو «مستودع المعالجة».</summary>
+        public string DestinationAr { get; set; } = DestRaw;
+
+        /// <summary>§B107 — أجزاء درجات الإصابة (5/7/10 أيام) لهذا البند — بلا صنف جديد.</summary>
+        public List<TreatmentPartDto> Parts { get; set; } = new();
+
+        /// <summary>ملخص التقسيم كما يراه الموظف في الجدول.</summary>
+        public string PartsSummary =>
+            !string.Equals(DestinationAr, DestTreat, StringComparison.Ordinal) ? "-"
+            : Parts == null || Parts.Count == 0 ? "كامل الكمية · متوسطة (7 أيام)"
+            : string.Join(" + ", Parts.Select(p =>
+                $"{p.QtyKg:N0} {(InfestationLevels.Normalize(p.InfestationLevel) == InfestationLevels.Light ? "خفيفة" : InfestationLevels.Normalize(p.InfestationLevel) == InfestationLevels.High ? "شديدة" : "متوسطة")}"));
     }
+
+    // §B107 — تسميات الوجهة كما تظهر في القائمة المنسدلة داخل الجدول
+    private const string DestRaw = "مخزن الخام";
+    private const string DestTreat = "مستودع المعالجة";
+
+    private static string DestToCode(string ar)
+        => ar == DestTreat ? ReceiptDestinations.Treatment : ReceiptDestinations.RawStore;
+    private static string CodeToDest(string code)
+        => ReceiptDestinations.IsTreatment(code) ? DestTreat : DestRaw;
 
     private static string StatusToCode(string ar) => ar switch
     { "مرفوض/تالف" => "Rejected", "معلّق لاحقاً" => "Pending", "Moved" => "Moved", _ => "Received" };
@@ -343,10 +370,52 @@ public partial class ReceivingView : UserControl
             ReceiptUnit = pack?.PackageNameAr ?? "كرتون",
             PackageCount = count,
             UnitWeightKg = uw,
-            QtyKg = count * uw
+            QtyKg = count * uw,
+            // §B107 — «يحتاج معالجة» يُقرأ من بطاقة الصنف مباشرةً، والوجهة تُقترح تبعاً له
+            RequiresTreatment = product.RequiresTreatment,
+            DestinationAr = product.RequiresTreatment ? DestTreat : DestRaw
         });
         PkgCountBox.Text = "0"; UnitWeightBox.Text = "0"; CalcTotalBox.Text = "";
     }
+
+    /// <summary>
+    /// §B107 — تقسيم كمية البند الواحد إلى أجزاء بدرجات إصابة مختلفة (5/7/10 أيام) بلا صنف جديد.
+    /// المدخل من داخل شاشة الاستلام نفسها — لا انتقال لشاشة أخرى ولا إعادة إدخال من الذاكرة.
+    /// </summary>
+    private void SplitParts_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is not Button b || b.Tag is not ItemRow row) return;
+            if (_locked) { AppContainer.Get<DialogService>().Error("السند مقفل (معتمد)."); return; }
+            if (!row.RequiresTreatment)
+            {
+                AppContainer.Get<DialogService>().Error(
+                    $"الصنف «{row.ProductName}» غير معلَّم بأنه «يحتاج معالجة» في بطاقة الأصناف — لا تقسيم لدرجات الإصابة عليه.");
+                return;
+            }
+            if (row.DestinationAr != DestTreat)
+            {
+                AppContainer.Get<DialogService>().Error(
+                    "اضبط وجهة البند على «مستودع المعالجة» أولاً — درجات الإصابة تخص المعالجة وحدها.");
+                return;
+            }
+
+            var dlg = new TreatmentSplitDialog(row.ProductName, row.QtyKg, row.PackageCount, row.Parts)
+            { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() == true)
+            {
+                row.Parts = dlg.Result ?? new List<TreatmentPartDto>();
+                ItemsGrid.Items.Refresh();
+            }
+        }
+        catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "Receiving.SplitParts"); }
+    }
+
+    /// <summary>§B107 — تحرير الوجهة في الجدول يُحدّث عمود ملخص التقسيم فوراً.</summary>
+    private void ItemsGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+        => Dispatcher.BeginInvoke(new Action(() => ItemsGrid.Items.Refresh()),
+               System.Windows.Threading.DispatcherPriority.Background);
 
     /// <summary>حذف بند من بنود الشحنة قبل الحفظ.</summary>
     private void RemoveItem_Click(object sender, RoutedEventArgs e)
@@ -379,7 +448,12 @@ public partial class ReceivingView : UserControl
                     UnitWeightKg = i.UnitWeightKg,
                     QtyKg = i.QtyKg,
                     ReceiptUnit = i.ReceiptUnit,
-                    ItemStatus = StatusToCode(i.Status)
+                    ItemStatus = StatusToCode(i.Status),
+                    // §B107 — الوجهة وأجزاء درجات الإصابة تُحفظ مع البند
+                    Destination = DestToCode(i.DestinationAr),
+                    TreatmentParts = DestToCode(i.DestinationAr) == ReceiptDestinations.Treatment
+                        ? (i.Parts ?? new List<TreatmentPartDto>())
+                        : new List<TreatmentPartDto>()
                 }).ToList(),
                 NotesBox.Text, ContainerBox.Text, emp?.Id,
                 _currentId > 0 ? _currentId : null,
@@ -402,7 +476,14 @@ public partial class ReceivingView : UserControl
         try
         {
             if (_currentId == 0) { AppContainer.Get<DialogService>().Error("احفظ سند الاستلام أولاً."); return; }
-            if (!AppContainer.Get<DialogService>().Confirm("سيتم اعتماد الاستلام وإنشاء الدفعات وتقييد الوارد في مخزن الخام. متابعة؟")) return;
+            // §B107 — الموظف يرى قبل الاعتماد ما سيحدث للبنود الموجَّهة للمعالجة
+            int toTreat = _items.Count(i => i.DestinationAr == DestTreat && StatusToCode(i.Status) == "Received");
+            var msg = "سيتم اعتماد الاستلام وإنشاء الدفعات وتقييد الوارد في مخزن الخام."
+                    + (toTreat > 0
+                        ? $"\n🧪 و{toTreat} بنداً موجَّهاً لمستودع المعالجة — ستبدأ معالجته تلقائياً بمُدد درجات الإصابة."
+                        : "")
+                    + "\nمتابعة؟";
+            if (!AppContainer.Get<DialogService>().Confirm(msg)) return;
             using var scope = AppContainer.NewScope();
             var svc = (IReceivingService)scope.ServiceProvider.GetService(typeof(IReceivingService));
             var r = svc.ApproveShipment(_currentId);
@@ -513,7 +594,21 @@ public partial class ReceivingView : UserControl
                     PackageCount = it.PackageCount,
                     UnitWeightKg = it.UnitWeightKg,
                     QtyKg = it.TotalWeightKg,
-                    Status = CodeToStatus(it.Status)
+                    Status = CodeToStatus(it.Status),
+                    RequiresTreatment = db.Products.Where(p => p.Id == it.ProductId)
+                        .Select(p => p.RequiresTreatment).FirstOrDefault(),
+                    DestinationAr = CodeToDest(it.Destination),
+                    // §B107 — استعادة أجزاء درجات الإصابة المحفوظة مع البند
+                    Parts = db.ShipmentItemTreatmentParts.AsNoTracking()
+                        .Where(tp => tp.ShipmentItemId == it.Id).OrderBy(tp => tp.Id)
+                        .Select(tp => new TreatmentPartDto
+                        {
+                            InfestationLevel = tp.InfestationLevel,
+                            QtyKg = tp.QtyKg,
+                            PackageCount = tp.PackageCount,
+                            DurationHours = tp.DurationHours,
+                            Notes = tp.Notes
+                        }).ToList()
                 });
             }
             // §10 — المستند يعود كما حُفظ بالضبط ويظهر كاملاً في الواجهة الرئيسية

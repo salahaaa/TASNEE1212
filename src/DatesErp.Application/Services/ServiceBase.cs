@@ -187,6 +187,81 @@ public abstract class ServiceBase
         return txn;
     }
 
+    /// <summary>
+    /// §B107 — **جوهر بدء المعالجة، مشترك بين مسارين**: شاشة المعالجة المستقلة
+    /// (<c>RawTreatmentService.Start</c>) و**اعتماد سند الاستلام** الذي يبدأ المعالجة تلقائياً.
+    ///
+    /// وُضع هنا بدل نسخه في الخدمتين لأن ازدواج منطق المخزون هو أخطر ما يمكن أن يحدث
+    /// لثابت التوازن <c>رصيد(WRM) + رصيد(WTRT) = InStockQtyKg</c>: نسختان تنحرفان،
+    /// وينحرف معهما المخزون بلا إنذار.
+    ///
+    /// يفترض أن المستدعي **داخل معاملة قائمة** ولا يفتح معاملة جديدة ولا يفحص صلاحية —
+    /// كلاهما مسؤولية الخدمة المستدعية (الاستلام يفحص «اعتماد استلام»، والشاشة تفحص «بدء معالجة»).
+    /// </summary>
+    /// <param name="checkEligibility">
+    /// فحص «الكمية لا تتجاوز المتاح للمعالجة». يُعطَّل عند الاستلام لأن الدفعة تُنشأ
+    /// في اللحظة نفسها من كمية البند، فالكمية مضمونة بحكم مصدرها ولا مخزون سابقاً لمقارنته.
+    /// </param>
+    protected RawTreatment StartTreatmentCore(
+        Lot lot, int? treatmentTypeId, double qtyKg, int packageCount,
+        DateTime startedAt, double hours, int? responsibleUserId, string notes,
+        bool checkEligibility = true, int? sourceWarehouseId = null)
+    {
+        if (lot == null) throw new DomainException("الدفعة غير موجودة.");
+        if (qtyKg <= 0) throw new DomainException("الكمية يجب أن تكون أكبر من صفر.");
+        if (hours <= 0)
+            throw new DomainException("مدة المعالجة غير محددة — أدخلها أو اختر نوع معالجة له مدة افتراضية.");
+
+        if (checkEligibility)
+        {
+            // §الكمية القابلة للإدخال في معالجة = المخزون − ما هو تحت المعالجة الآن − المحجوز
+            // للخطط. طرح المحجوز مقصود: لو أُدخلت كمية محجوزة لخطة معتمدة إلى المعالجة
+            // لتعطّلت خطة قائمة بلا إنذار — والخطة المعتمدة التزام قائم لا يُنقض ضمناً.
+            double eligible = lot.InStockQtyKg - lot.UnderTreatmentQtyKg - lot.ReservedQtyKg;
+            if (qtyKg > eligible + 0.001)
+                throw new DomainException(
+                    $"الكمية المطلوبة ({qtyKg:N1} كجم) تتجاوز المتاح للمعالجة في الدفعة {lot.LotCode}.\n"
+                    + $"المخزون: {lot.InStockQtyKg:N1} — تحت المعالجة: {lot.UnderTreatmentQtyKg:N1} "
+                    + $"— المحجوز لخطط: {lot.ReservedQtyKg:N1} — القابل للإدخال: {Math.Max(0, eligible):N1} كجم");
+        }
+
+        var t = new RawTreatment
+        {
+            TreatmentNo = Numbering.Next("TRT"),
+            LotId = lot.Id,
+            ProductId = lot.ProductId,           // §لا صنف جديد: يُنسخ من الدفعة كما هو
+            TreatmentTypeId = treatmentTypeId,
+            QtyKg = qtyKg,
+            PackageCount = packageCount,
+            StartedAt = startedAt,
+            DurationHours = hours,
+            ExpectedReadyAt = startedAt.AddHours(hours),   // §يُحسب تلقائياً
+            ResponsibleUserId = responsibleUserId ?? Session?.UserId,
+            Notes = notes,
+            Status = TreatmentStatuses.InProgress
+        };
+        Db.RawTreatments.Add(t);
+        Db.SaveChanges(); // للحصول على المعرف قبل قيد الحركة
+
+        // §حركة المخزون: خروج من الخام ودخول إلى مستودع المعالجة — بنفس الكمية
+        // §مخزن المصدر: مخزن الخام الافتراضي WRM، أو مخزن الاستلام الفعلي حين تبدأ
+        // المعالجة من سند استلام وصل إلى مخزن خام آخر (خام 2 / ثلاجة...).
+        int srcWh = sourceWarehouseId ?? WarehouseId("WRM");
+        PostStockMovement(srcWh, MovementType.Outbound, qtyKg, packageCount,
+            ReferenceDocType.TreatmentStart, t.TreatmentNo,
+            productId: t.ProductId, lotId: lot.Id, customerId: lot.CustomerId,
+            packagingTypeId: lot.PackagingTypeId, notes: $"بدء معالجة {t.TreatmentNo}");
+        PostStockMovement(WarehouseId("WTRT"), MovementType.Inbound, qtyKg, packageCount,
+            ReferenceDocType.TreatmentStart, t.TreatmentNo,
+            productId: t.ProductId, lotId: lot.Id, customerId: lot.CustomerId,
+            packagingTypeId: lot.PackagingTypeId, notes: $"بدء معالجة {t.TreatmentNo}");
+
+        // §InStockQtyKg لا يتغير — الكمية انتقلت بين مستودعين ولم تغادر المنشأة
+        lot.UnderTreatmentQtyKg += qtyKg;
+        Db.SaveChanges();
+        return t;
+    }
+
     /// <summary>خصم كمية من دفعة (Lot) مع حماية السالب.</summary>
     protected void ConsumeLot(int lotId, double qtyKg, string what)
     {

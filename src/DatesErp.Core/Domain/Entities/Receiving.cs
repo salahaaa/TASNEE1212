@@ -36,6 +36,112 @@ public class ShipmentItem : BaseEntity
     /// <summary>§نظام الوحدات: وحدة الاستلام الأصلية كما وصلت فعلياً (كرتون/سلة/كجم...) — لا تُفقد أبداً،
     /// والكمية القياسية للمخزون الخام هي الكيلو (TotalWeightKg).</summary>
     public string ReceiptUnit { get; set; }
+
+    /// <summary>
+    /// §B107 — وجهة البند بعد الاعتماد: <see cref="ReceiptDestinations.RawStore"/> مخزن الخام
+    /// (السلوك القائم والافتراضي) أو <see cref="ReceiptDestinations.Treatment"/> مستودع المعالجة
+    /// والتعقيم. الاختيار **لكل بند** لا لكل سند: الحاوية الواحدة تحمل أصنافاً بعضها مصاب وبعضها سليم.
+    /// فارغ = مخزن الخام (توافق كامل مع كل السندات القديمة).
+    /// </summary>
+    public string Destination { get; set; } = ReceiptDestinations.RawStore;
+
+    /// <summary>
+    /// §B107 — تقسيم كمية البند الواحد إلى أجزاء بدرجات إصابة مختلفة (5/7/10 أيام)
+    /// **بلا صنف جديد**: الأجزاء تصير عدة صفوف <c>RawTreatment</c> على نفس الدفعة عند الاعتماد.
+    /// </summary>
+    public List<ShipmentItemTreatmentPart> TreatmentParts { get; set; } = new();
+}
+
+/// <summary>§B107 — وجهة بند الاستلام بعد الاعتماد. محصورة في مخزنين معلومين — لا كود حر.</summary>
+public static class ReceiptDestinations
+{
+    /// <summary>مخزن الخام — الوجهة الافتراضية والسلوك القائم.</summary>
+    public const string RawStore = "WRM";
+
+    /// <summary>مستودع المعالجة والتعقيم — تبدأ المعالجة تلقائياً عند اعتماد السند.</summary>
+    public const string Treatment = "WTRT";
+
+    public static bool IsTreatment(string d)
+        => string.Equals((d ?? "").Trim(), Treatment, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>يوحّد أي قيمة قادمة من الواجهة/البيانات القديمة إلى أحد الرمزين.</summary>
+    public static string Normalize(string d)
+        => IsTreatment(d) ? Treatment : RawStore;
+
+    public static string ToArabic(string d)
+        => IsTreatment(d) ? "مستودع المعالجة والتعقيم" : "مخزن الخام";
+}
+
+/// <summary>
+/// §B107 — جزء من كمية بند استلام بدرجة إصابة واحدة.
+///
+/// **لماذا جدول لا صنف جديد:** البند الواحد (5,000 سلة سكري) قد ينقسم إلى 4,000 سليمة
+/// + 500 إصابة متوسطة (7 أيام) + 500 إصابة شديدة (10 أيام). إنشاء صنف لكل درجة كان
+/// سيفجّر بطاقة الأصناف ويقطع التتبع؛ فالصنف واحد والدرجة صفة كمية على الجزء.
+/// كل جزء يتحول عند الاعتماد إلى صف <c>RawTreatment</c> مستقل على **نفس الدفعة**،
+/// وهو بالضبط ما يجيده المحرك القائم (مُختبَر بـ500+500).
+/// </summary>
+public class ShipmentItemTreatmentPart : BaseEntity
+{
+    public int ShipmentItemId { get; set; }
+
+    /// <summary>درجة الإصابة — انظر <see cref="InfestationLevels"/>.</summary>
+    public string InfestationLevel { get; set; } = InfestationLevels.Medium;
+
+    /// <summary>نوع المعالجة المقابل للدرجة (TRT-INF-L/M/H) — يُشتق عند الحفظ إن لم يُحدَّد.</summary>
+    public int? TreatmentTypeId { get; set; }
+
+    public double QtyKg { get; set; }
+    public int PackageCount { get; set; }
+
+    /// <summary>تجاوز يدوي للمدة بالساعات — فارغ = المدة الافتراضية لدرجة الإصابة.</summary>
+    public double? DurationHours { get; set; }
+
+    public string Notes { get; set; }
+}
+
+/// <summary>
+/// §B107 — درجات الإصابة ومُددها المعتمدة: خفيفة 5 أيام · متوسطة 7 أيام · شديدة 10 أيام.
+/// الرموز تطابق أنواع المعالجة المبذورة في B106 (TRT-INF-L / TRT-INF-M / TRT-INF-H).
+/// </summary>
+public static class InfestationLevels
+{
+    public const string Light = "Light";     // 5 أيام
+    public const string Medium = "Medium";   // 7 أيام
+    public const string High = "High";       // 10 أيام
+
+    /// <summary>رمز نوع المعالجة المبذور المقابل للدرجة.</summary>
+    public static string TypeCode(string level) => Normalize(level) switch
+    {
+        Light => "TRT-INF-L",
+        High => "TRT-INF-H",
+        _ => "TRT-INF-M"
+    };
+
+    /// <summary>المدة الافتراضية بالساعات — احتياط لو غاب نوع المعالجة من القاعدة.</summary>
+    public static double DefaultHours(string level) => Normalize(level) switch
+    {
+        Light => 120d,
+        High => 240d,
+        _ => 168d
+    };
+
+    public static string Normalize(string level)
+    {
+        var s = (level ?? "").Trim();
+        if (s.Equals(Light, StringComparison.OrdinalIgnoreCase) || s.Contains("خفيف")) return Light;
+        if (s.Equals(High, StringComparison.OrdinalIgnoreCase) || s.Contains("شديد")) return High;
+        return Medium;
+    }
+
+    public static string ToArabic(string level) => Normalize(level) switch
+    {
+        Light => "إصابة خفيفة — 5 أيام",
+        High => "إصابة شديدة — 10 أيام",
+        _ => "إصابة متوسطة — 7 أيام"
+    };
+
+    public static readonly string[] All = { Light, Medium, High };
 }
 
 /// <summary>§7 — الدفعة (Lot) الناتجة عن اعتماد الاستلام — أساس التتبع الكامل.</summary>
