@@ -20,6 +20,16 @@ public class PlanRowUi : System.ComponentModel.INotifyPropertyChanged
 
     private int _no;
     public int No { get => _no; set { if (_no != value) { _no = value; OnChanged(nameof(No)); } } }
+
+    /// <summary>
+    /// §B108 — معرّف بند الخطة المحفوظ (0 = صف جديد لم يُحفظ بعد).
+    ///
+    /// أُضيف عند حذف لوحة «بنود اليوم»: كان تعديل البند المحفوظ يمر حصراً عبر تلك اللوحة
+    /// لأنها وحدها تحمل <c>PlanRowDto.ItemId</c>. وبدونه كان حذف اللوحة سيُسقط
+    /// <c>UpdatePlanItem</c> من الواجهة كلياً — أي فقدان وظيفة لا تنظيفاً.
+    /// </summary>
+    public int ItemId { get; set; }
+
     public int? CustomerId { get; set; }
     public string CustomerName { get; set; }
     public int? ShipmentId { get; set; }
@@ -813,7 +823,9 @@ public partial class PlanningView : UserControl
             AppContainer.Get<DialogService>().Info(r.Message + "\nحُفظت البنود كما أدخلتها (عميل/شحنة/دفعة/صنف/عبوة).\nأرسلها للاعتماد للمدير العام عند الجاهزية.");
             SetStatusUI("Draft");
             RefreshPlansList();
-            LoadPlanDashboards(_currentPlanId);
+            // §B108: إعادة تحميل البنود من القاعدة بعد الحفظ — الحفظ يعيد بناء البنود،
+            // فمعرفاتها في الذاكرة تصبح قديمة، و«تعديل البند» يعتمد عليها.
+            if (_currentPlanId > 0) OpenPlan(_currentPlanId);
         }
         catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "Planning.Save"); }
     }
@@ -864,7 +876,6 @@ public partial class PlanningView : UserControl
             SetLocked(true);
             SetStatusUI("Approved");
             RefreshPlansList();
-            LoadPlanDashboards(_currentPlanId);
         }
         catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "Planning.Approve"); }
     }
@@ -1110,6 +1121,7 @@ public partial class PlanningView : UserControl
             {
                 _rows.Add(new PlanRowUi
                 {
+                    ItemId = it.Id,   // §B108: يتيح تعديل البند المحفوظ من الجدول الرئيسي
                     CustomerId = it.CustomerId,
                     CustomerName = db.Customers.Where(c => c.Id == it.CustomerId).Select(c => c.CustomerName).FirstOrDefault() ?? "—",
                     ShipmentId = it.ShipmentId,
@@ -1157,8 +1169,6 @@ public partial class PlanningView : UserControl
             SetLocked(plan.IsApproved);
             SetStatusUI(plan.IsApproved ? "Approved" : plan.Status == "UnderApproval" ? "UnderApproval" : plan.Status == "RevisionRequired" ? "RevisionRequired" : "Draft");
             UpdateCapacityBar();
-            LoadPlanDashboards(plan.Id);
-            if (plan.StartDate != null) { DailyDateBox.SelectedDate = plan.StartDate; ShowDailyPlan_Click(null, null); }
             // §توحيد الواجهات: عند فتح خطة من البحث، ابدأ العرض من أعلى النموذج ليكون متماسكاً غير منقسم
             // §لم يعد هناك تمرير رأسي — الشاشة كلها معروضة فلا حاجة للعودة للأعلى
         }
@@ -1195,47 +1205,34 @@ public partial class PlanningView : UserControl
             OpenPlan(id);
     }
 
-    // ══════════ خطة اليوم وحالة الأيام وتقدم العملاء ══════════
+    // ══════════ تعديل البند المحفوظ ══════════
 
-    private void ShowDailyPlan_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var date = DailyDateBox.SelectedDate ?? DateTime.Today;
-            using var scope = AppContainer.NewScope();
-            var svc = (IPlanProgressService)scope.ServiceProvider.GetService(typeof(IPlanProgressService));
-            var rows = svc.GetDailyPlan(date.ToString("dd/MM/yyyy"), _currentPlanId > 0 ? _currentPlanId : null);
-            DailyGrid.ItemsSource = rows;
-            if (rows.Count == 0)
-                AppContainer.Get<DialogService>().Info($"لا توجد بنود مخططة ليوم {date:dd/MM/yyyy}" + (_currentPlanId > 0 ? " في هذه الخطة." : " في أي خطة."));
-        }
-        catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "Planning.Daily"); }
-    }
-
-    private void Today_Click(object sender, RoutedEventArgs e)
-    {
-        DailyDateBox.SelectedDate = DateTime.Today;
-        ShowDailyPlan_Click(sender, e);
-    }
-
-    private void DailyGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (EditRowBtn != null)
-            EditRowBtn.Visibility = DailyGrid.SelectedItem != null ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>§النقر المزدوج على بند اليوم يفتح تعديله مباشرة.</summary>
-    private void DailyGrid_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (DailyGrid.SelectedItem != null) EditRow_Click(sender, e);
-    }
-
-    /// <summary>تعديل بند مستقبلي (تاريخ/كمية/وردية/صنف/عبوة) مع إعادة فحص الطاقة تلقائياً — يدعم اشتراطات العملاء المتغيرة.</summary>
+    /// <summary>
+    /// §B108 — تعديل بند خطة **محفوظ** (تاريخ/كمية/وردية/صنف/عبوة) مع إعادة فحص الطاقة في الخدمة.
+    ///
+    /// كان هذا الأمر معلّقاً على لوحة «بنود اليوم» المحذوفة، وهي وحدها التي كانت تحمل
+    /// معرّف البند. صار الآن على **الجدول الرئيسي** مباشرةً عبر <c>PlanRowUi.ItemId</c>:
+    /// نفس الوظيفة، في المكان الذي ينظر إليه الموظف أصلاً، وبنقرة مزدوجة على الصف.
+    ///
+    /// يعمل على الخطة المعتمدة أيضاً — وهذا مقصود: الجدول نفسه يُقفل بعد الاعتماد،
+    /// و<c>UpdatePlanItem</c> هو المسار الوحيد الذي يفرض حراس التعديل بعد التنفيذ
+    /// (صلاحية «إلغاء/استثناء» للبنود المنفَّذة، وحدود فترة الخطة، وفحص الطاقة).
+    /// </summary>
     private void EditRow_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            if (DailyGrid.SelectedItem is not PlanRowDto row) return;
+            if (RowsGrid.SelectedItem is not PlanRowUi row)
+            { AppContainer.Get<DialogService>().Error("اختر بنداً من الجدول أولاً."); return; }
+
+            // §الصف غير المحفوظ يُعدَّل في الجدول مباشرةً — لا معرف له في القاعدة بعد
+            if (row.ItemId <= 0)
+            {
+                AppContainer.Get<DialogService>().Info(
+                    "هذا البند لم يُحفظ بعد — عدّله مباشرةً في الجدول (الكراتين/التاريخ) ثم احفظ الخطة.");
+                return;
+            }
+
             using var scope = AppContainer.NewScope();
             var db = scope.ServiceProvider.GetRequiredService<DatesErpDbContext>();
             var products = scope.ServiceProvider.GetRequiredService<IPlanningService>().GetFinishedProducts();
@@ -1243,13 +1240,14 @@ public partial class PlanningView : UserControl
             var fields = new List<Views.FieldDef>
             {
                 new() { Key = "date", LabelAr = "التاريخ الجديد (dd/MM/yyyy)", Default = row.Date },
-                new() { Key = "qty", LabelAr = "الكمية الجديدة (كجم)", Default = row.PlannedKg.ToString() },
-                new() { Key = "shift", LabelAr = "رقم الوردية", Default = row.ShiftId?.ToString() ?? "1" },
+                new() { Key = "qty", LabelAr = "الكمية الجديدة (كجم)", Default = row.QtyKg.ToString("0.###") },
+                new() { Key = "shift", LabelAr = "رقم الوردية", Default = row.ShiftId.ToString() },
                 new() { Key = "product", LabelAr = "الصنف التام", Kind = "combo", Options = products.Select(p => p.ProductNameAr).ToArray(), Default = row.ProductName },
                 new() { Key = "pack", LabelAr = "العبوة", Kind = "combo", Options = packs.Select(p => p.PackageNameAr).ToArray(), Default = row.PackName }
             };
             var dlg = new Views.EntityFormDialog($"تعديل البند — {row.CustomerName} / {row.ProductName}", fields) { Owner = Window.GetWindow(this) };
             if (dlg.ShowDialog() != true) return;
+
             double? qty = null;
             if (double.TryParse(dlg.Values["qty"]?.ToString(), out var q) && q > 0) qty = q;
             int? shift = null;
@@ -1267,22 +1265,26 @@ public partial class PlanningView : UserControl
             var r = svc.UpdatePlanItem(row.ItemId, dlg.Values["date"]?.ToString(), qty, shift, null, newProductId, newPackId);
             if (!r.Ok) { AppContainer.Get<DialogService>().Error(r.Message); return; }
             AppContainer.Get<DialogService>().Info(r.Message);
-            ShowDailyPlan_Click(sender, e);
-            if (_currentPlanId > 0) LoadPlanDashboards(_currentPlanId);
+
+            // §إعادة تحميل الخطة من القاعدة: التعديل تم في الخدمة، والجدول يجب أن يعكس
+            // ما حُفظ فعلاً (الكراتين المشتقة قد تختلف عمّا أدخله المستخدم) لا ما ظنه.
+            if (_currentPlanId > 0) OpenPlan(_currentPlanId);
         }
         catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "Planning.EditRow"); }
     }
 
-    private void LoadPlanDashboards(int planId)
+    /// <summary>
+    /// §B108 — نقر مزدوج على صف الجدول الرئيسي يفتح تعديل البند المحفوظ.
+    ///
+    /// يتجاهل النقر على خلية قابلة للتحرير (الكراتين/التاريخ) كي لا يسرق النافذةُ
+    /// التحريرَ المباشر داخل الجدول، ويتجاهل الصف غير المحفوظ (ItemId = 0).
+    /// </summary>
+    private void RowsGrid_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        try
-        {
-            using var scope = AppContainer.NewScope();
-            var svc = (IPlanProgressService)scope.ServiceProvider.GetService(typeof(IPlanProgressService));
-            DaysGrid.ItemsSource = svc.GetPlanDayStatuses(planId);
-            CustomersProgGrid.ItemsSource = svc.GetPlanProgressByCustomer(planId);
-        }
-        catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "Planning.Dashboards"); }
+        if (RowsGrid.SelectedItem is not PlanRowUi row || row.ItemId <= 0) return;
+        // خلية قيد التحرير ← النقر المزدوج للتحرير لا لفتح النافذة
+        if (RowsGrid.CurrentColumn != null && !RowsGrid.CurrentColumn.IsReadOnly) return;
+        EditRow_Click(sender, e);
     }
 
     // ══════════ الطباعة والتصدير ══════════

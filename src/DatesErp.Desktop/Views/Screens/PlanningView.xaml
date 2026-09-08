@@ -15,7 +15,6 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <!-- ١) المسار + الحالة -->
@@ -162,8 +161,13 @@
             <!-- ٥) جدول البنود (ارتفاع مضمون) -->
             <Border Grid.Row="5" Style="{StaticResource Card}" Margin="0,0,0,6">
                 <StackPanel>
-                    <TextBlock Text="📦 بنود الخطة — العميل والدفعة والصنف والكميات" FontSize="12" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,6"/>
-                    <DataGrid x:Name="RowsGrid" MinHeight="260" RowHeight="32" FontSize="13.5" ColumnHeaderHeight="36">
+                    <DockPanel Margin="0,0,0,6" LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Right" Text="📦 بنود الخطة — العميل والدفعة والصنف والكميات" FontSize="12" FontWeight="Bold" Foreground="#1F2937" VerticalAlignment="Center"/>
+                        <!-- §B108: تعديل البند المحفوظ — انتقل إلى هنا بعد حذف لوحة «بنود اليوم» -->
+                        <Button DockPanel.Dock="Left" Content="✏️ تعديل البند المحدد" Style="{StaticResource ErpButton}"
+                                Click="EditRow_Click" ToolTip="تعديل التاريخ/الكمية/الوردية/الصنف/العبوة لبند محفوظ (أو انقر الصف نقراً مزدوجاً)"/>
+                    </DockPanel>
+                    <DataGrid x:Name="RowsGrid" MinHeight="260" RowHeight="32" FontSize="13.5" ColumnHeaderHeight="36" MouseDoubleClick="RowsGrid_DoubleClick">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="م" Binding="{Binding No}" Width="34" IsReadOnly="True"/>
                             <DataGridTextColumn x:Name="CustomerColumn" Header="العميل المالك 👤" Binding="{Binding CustomerName}" Width="*" MinWidth="110" IsReadOnly="True"/>
@@ -195,68 +199,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- ٦) حالة الأيام وتقدم العملاء -->
-            <!-- §B106.2 — لوحات «بنود اليوم» و«حالة أيام الخطة» و«تقدم كل عميل» أُخفيت
-                 بطلب المستخدم: تبقى شاشة واحدة = بطاقة الخطة + بنودها + الخطط المحفوظة.
-                 أُخفيت ولم تُحذف: عناصرها (DailyGrid/DaysGrid/CustomersProgGrid/
-                 DailyDateBox/EditRowBtn) مرجوعة في عشرات المواضع بالكود الخلفي،
-                 وحذف الترميز يكسر البناء. الإخفاء يحقق المطلوب بصرياً بلا مخاطرة،
-                 ويسمح بإعادتها لاحقاً بتغيير Visibility فقط. -->
-            <Border x:Name="DailyPanelsCard" Visibility="Collapsed" Grid.Row="6" Style="{StaticResource WhiteCard}" Margin="0,0,0,6">
-                <StackPanel>
-                    <WrapPanel Margin="0,0,0,4">
-                        <TextBlock Text="📅 اليوم:" FontWeight="Bold" FontSize="11.5" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <DatePicker x:Name="DailyDateBox" Width="140"/>
-                        <Button Content="عرض خطة اليوم" Style="{StaticResource ErpPrimaryButton}" Click="ShowDailyPlan_Click" Margin="6,0,0,0"/>
-                        <Button Content="اليوم الحالي" Style="{StaticResource ErpButton}" Click="Today_Click" Margin="6,0,0,0"/>
-                        <Button x:Name="EditRowBtn" Content="✏️ تعديل البند المحدد" Style="{StaticResource ErpButton}" Click="EditRow_Click" Visibility="Collapsed" Margin="6,0,0,0"/>
-                    </WrapPanel>
-                    <WrapPanel>
-                        <StackPanel Margin="0,0,16,0">
-                            <TextBlock Text="بنود اليوم:" FontSize="11" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,2"/>
-                            <DataGrid x:Name="DailyGrid" Height="112" Width="640" RowHeight="26" SelectionChanged="DailyGrid_SelectionChanged" MouseDoubleClick="DailyGrid_DoubleClick">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="العميل 👤" Binding="{Binding CustomerName}" Width="*" MinWidth="100" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="الصنف 🏷️" Binding="{Binding ProductName}" Width="1.2*" MinWidth="110" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="الوردية" Binding="{Binding ShiftName}" Width="80" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="كراتين" Binding="{Binding PlannedCartons}" Width="60" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="الطاقة القصوى (كرتون)" Binding="{Binding MaxCapacity}" Width="120" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="المعدل/ساعة (محسوب)" Binding="{Binding RatePerHour}" Width="110" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="ساعات مطلوبة" Binding="{Binding RequiredHours}" Width="80" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="ساعات متبقية" Binding="{Binding HoursRemainingOnDay}" Width="80" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="الحالة" Binding="{Binding ExecStatusAr}" Width="*" MinWidth="80" IsReadOnly="True"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </StackPanel>
-                        <StackPanel Margin="0,0,16,0">
-                            <TextBlock Text="حالة أيام الخطة:" FontSize="11" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,2"/>
-                            <DataGrid x:Name="DaysGrid" Height="112" Width="330" RowHeight="26">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="اليوم" Binding="{Binding Date}" Width="100" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="البنود" Binding="{Binding RowsCount}" Width="50" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="المخطط (كجم)" Binding="{Binding PlannedKg}" Width="90" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="الحالة" Binding="{Binding StatusAr}" Width="*" IsReadOnly="True"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="تقدم كل عميل:" FontSize="11" FontWeight="Bold" Foreground="#1F2937" Margin="0,0,0,2"/>
-                            <DataGrid x:Name="CustomersProgGrid" Height="112" Width="430" RowHeight="26">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="العميل" Binding="{Binding CustomerName}" Width="*" MinWidth="110" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="مخطط" Binding="{Binding Planned}" Width="65" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="منتج" Binding="{Binding Produced}" Width="65" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="مسلَّم" Binding="{Binding Delivered}" Width="65" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="الحالة" Binding="{Binding StatusAr}" Width="*" MinWidth="70" IsReadOnly="True"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </StackPanel>
-                    </WrapPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- ٧) سجل الخطط -->
-            <Border Grid.Row="7" Style="{StaticResource WhiteCard}">
+            <!-- ٦) سجل الخطط -->
+            <Border Grid.Row="6" Style="{StaticResource WhiteCard}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
                         <TextBlock Text="📋 الخطط المحفوظة (نقر مزدوج للفتح):" FontWeight="Bold" FontSize="11.5" Foreground="#1F2937" VerticalAlignment="Center" Margin="0,0,8,0"/>
