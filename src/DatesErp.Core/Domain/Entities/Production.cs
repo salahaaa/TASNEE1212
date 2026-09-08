@@ -20,6 +20,14 @@ public class ProductionPlan : WorkflowDocument
     /// <summary>§B79: المستخدم الذي أقفل الخطة.</summary>
     public int? ClosedBy { get; set; }
 
+    /// <summary>
+    /// §تعديلات العملاء أثناء التنفيذ — رقم الإصدار: 1 = الخطة الأصلية، وكل تعديل معتمد
+    /// يرفعه بواحد. الخطة الأصلية لا تُحذف ولا تُعدَّل في مكانها؛ يُنشأ إصدار جديد.
+    /// </summary>
+    public int RevisionNo { get; set; } = 1;
+    /// <summary>§تعديلات العملاء — معرف الخطة الأصلية التي بُنيت منها هذه النسخة (فارغ = أصلية).</summary>
+    public int? ParentPlanId { get; set; }
+
     public List<ProductionPlanItem> Items { get; set; } = new();
 }
 
@@ -29,6 +37,8 @@ public class ProductionPlanItem : BaseEntity
     public string SourceType { get; set; } = "Manual"; // Manual | FromReceiving
     public int? LotId { get; set; }
     public int? ShipmentId { get; set; } // §المرجع الكامل: الشحنة التي منها الدفعة
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تسافر مع البند من الاستلام حتى التسليم.</summary>
+    public string ReceiptUnit { get; set; }
     public int? CustomerId { get; set; }
     public int ProductId { get; set; }
     public int? PackagingTypeId { get; set; }
@@ -79,6 +89,8 @@ public class ProductionOrderItem : BaseEntity
     public int? PlanItemId { get; set; }
     public int? LotId { get; set; }
     public int? ShipmentId { get; set; } // يُنقل كما هو من سطر الخطة
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تنتقل من بند الخطة إلى بند الأمر.</summary>
+    public string ReceiptUnit { get; set; }
     public int? CustomerId { get; set; } // ملكية السطر محفوظة لكل سطر
     public int ProductId { get; set; }
     public int? PackagingTypeId { get; set; }
@@ -228,4 +240,55 @@ public class PlanClosingItem : BaseEntity
     public double WastageKg { get; set; }
     /// <summary>المتبقي المُعاد لمخزن الخام بنفس العميل والدفعة.</summary>
     public double ReturnedToRawKg { get; set; }
+}
+
+/// <summary>
+/// §تعديلات العملاء أثناء التنفيذ — سجل تعديل معتمد لخطة إنتاج (Change Request + Revision).
+///
+/// لا يجوز تعديل صنف خطة بدأ تنفيذها بصمت في مكانه (يحفظ النظام التاريخ ولا يمحوه).
+/// هذا الكيان يوثّق الحدث كاملاً: من طلب، من اعتمد، السبب، الصنف القديم/الجديد،
+/// الكمية المخططة/المنفذة/المتبقية، والحالة — ويُنشئ عند الاعتماد إصداراً جديداً
+/// من الخطة (Revision) بقي المنتَج منه محفوظاً ومحمياً.
+/// </summary>
+public class PlanAmendment : WorkflowDocument
+{
+    /// <summary>الخطة الأصلية التي طُلب تعديلها.</summary>
+    public int OriginalPlanId { get; set; }
+    /// <summary>بند الخطة المستهدف بالتعديل (فارغ = الخطة كلها).</summary>
+    public int? PlanItemId { get; set; }
+    /// <summary>أمر التنفيذ المرتبط (إن كان التعديل على أمر قائم).</summary>
+    public int? SourceOrderId { get; set; }
+
+    public int? CustomerId { get; set; }
+    public int? LotId { get; set; }
+    public int? ShipmentId { get; set; }
+
+    /// <summary>الصنف القديم (قبل التعديل).</summary>
+    public int OldProductId { get; set; }
+    /// <summary>الصنف الجديد (بعد التعديل).</summary>
+    public int NewProductId { get; set; }
+    public int? NewPackagingTypeId { get; set; }
+
+    /// <summary>الكمية المخططة الأصلية (كجم).</summary>
+    public double OldQtyKg { get; set; }
+    /// <summary>الكمية المنفذة فعلياً قبل التعديل (محمية — لا تُمسّ).</summary>
+    public double ExecutedQtyKg { get; set; }
+    /// <summary>المتبقي = المخطط − المنفذ (يُوقَف أو يُحوَّل حسب القرار).</summary>
+    public double RemainingQtyKg { get; set; }
+    /// <summary>الكمية الجديدة للصنف الجديد (الافتراضي = المتبقي).</summary>
+    public double NewQtyKg { get; set; }
+
+    /// <summary>سبب التعديل (إلزامي — يُسجَّل للتدقيق).</summary>
+    public string Reason { get; set; }
+
+    /// <summary>حالة تنفيذ الخطة وقت طلب التعديل: NotStarted | Partial | Completed.</summary>
+    public string ExecutionState { get; set; } = "NotStarted";
+    /// <summary>متى طُلب التعديل (يُؤخذ من CreatedDate لكن يُحفظ صراحةً للوضوح).</summary>
+    public DateTime RequestedAt { get; set; } = DateTime.Now;
+    /// <summary>من طلب التعديل.</summary>
+    public int? RequestedBy { get; set; }
+    /// <summary>متى طُبّق التعديل فعلياً (أُنشئت النسخة الجديدة).</summary>
+    public DateTime? AppliedAt { get; set; }
+    /// <summary>الخطة/الإصدار الجديد الناتج عن التعديل.</summary>
+    public int? NewRevisionPlanId { get; set; }
 }

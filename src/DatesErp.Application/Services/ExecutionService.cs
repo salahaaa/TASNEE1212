@@ -124,7 +124,6 @@ public class ExecutionService : ServiceBase, IExecutionService
             double consumed = consumedRawKg > 0 ? consumedRawKg : plannedRaw;
 
             // صرف الخام فعلياً من الدفعات — هنا لا عند الاعتماد
-            var whRawForClose = WarehouseId("WRM");
             var takeByLot = new Dictionary<int, double>(); // §B86/M12: المصروف الفعلي لكل دفعة — أساس توزيع المرتجع
             var custByLot = new Dictionary<int, int?>();   // §B88: عميل حركة الصرف لكل دفعة (أول بنودها)
             foreach (var oi in order.Items.Where(i => i.LotId != null))
@@ -144,10 +143,13 @@ public class ExecutionService : ServiceBase, IExecutionService
             // §B88: حركة صرف واحدة لكل دفعة — بنود الدفعة الواحدة كانت تنشر حركات مكررة بنفس المرجع (DUPLICATE)
             foreach (var kvLot in takeByLot)
             {
+                var lotTake = Db.Lots.FirstOrDefault(l => l.Id == kvLot.Key);
+                // §المخازن المتعددة — يُصرف الخام من مخزن الدفعة (خام/ثلاجة/خام 2...) لا من WRM الثابت
+                var whTake = lotTake?.WarehouseId ?? WarehouseId("WRM");
                 ConsumeLot(kvLot.Key, kvLot.Value, "إقفال يوم الإنتاج");
-                PostStockMovement(whRawForClose, MovementType.Outbound, kvLot.Value, 0,
+                PostStockMovement(whTake, MovementType.Outbound, kvLot.Value, 0,
                     ReferenceDocType.ProductionExecution, order.DocumentNumber,
-                    productId: Db.Lots.Where(l => l.Id == kvLot.Key).Select(l => l.ProductId).FirstOrDefault(),
+                    productId: lotTake?.ProductId ?? Db.Lots.Where(l => l.Id == kvLot.Key).Select(l => l.ProductId).FirstOrDefault(),
                     lotId: kvLot.Key, customerId: custByLot.TryGetValue(kvLot.Key, out var cc) ? cc : order.CustomerId, orderId: order.Id,
                     notes: "صرف خام فعلي عند إقفال يوم الإنتاج");
             }
@@ -318,7 +320,8 @@ public class ExecutionService : ServiceBase, IExecutionService
                     if (back <= 0) continue;
                     backAssigned += back;
                     lotBack.InStockQtyKg += back;
-                    PostStockMovement(WarehouseId("WRM"), MovementType.Inbound, back, 0,
+                    // §المخازن المتعددة — المرتجع يعود إلى مخزن الدفعة (خام/ثلاجة/خام 2...) لا WRM الثابت
+                    PostStockMovement(lotBack.WarehouseId ?? WarehouseId("WRM"), MovementType.Inbound, back, 0,
                         ReferenceDocType.Return, exe.DocumentNumber,
                         productId: lotBack.ProductId, lotId: lotBack.Id, customerId: lotBack.CustomerId,
                         orderId: order.Id,

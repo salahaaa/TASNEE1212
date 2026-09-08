@@ -91,6 +91,10 @@
                             <DataGridTextColumn Header="العدد" Binding="{Binding PackageCount}" Width="80" IsReadOnly="True"/>
                             <DataGridTextColumn Header="وزن العبوة (كجم)" Binding="{Binding UnitWeightKg}" Width="115" IsReadOnly="True"/>
                             <DataGridTextColumn Header="الإجمالي (كجم)" Binding="{Binding QtyKg}" Width="110" IsReadOnly="True"/>
+                            <!-- §المخازن المتعددة — مخزن الخام الوجهة لكل بند (خام/ثلاجة/خام 2...) -->
+                            <DataGridComboBoxColumn x:Name="ItemWarehouseColumn" Header="المخزن" Width="150"
+                                                    DisplayMemberPath="WarehouseNameAr" SelectedValuePath="Id"
+                                                    SelectedValueBinding="{Binding WarehouseId, UpdateSourceTrigger=PropertyChanged}"/>
                             <DataGridComboBoxColumn Header="حالة البند (جزئي)" SelectedItemBinding="{Binding Status, UpdateSourceTrigger=PropertyChanged}" Width="120">
                                 <DataGridComboBoxColumn.ItemsSource>
                                     <x:Array Type="sys:String">
@@ -100,6 +104,36 @@
                                     </x:Array>
                                 </DataGridComboBoxColumn.ItemsSource>
                             </DataGridComboBoxColumn>
+                            <!-- §المعالجة ضمن أمر الاستلام — قرار على مستوى سطر الصنف (نعم/لا) -->
+                            <DataGridComboBoxColumn Header="المعالجة *" SelectedItemBinding="{Binding TreatmentChoice, UpdateSourceTrigger=PropertyChanged}" Width="95">
+                                <DataGridComboBoxColumn.ItemsSource>
+                                    <x:Array Type="sys:String">
+                                        <sys:String>نعم</sys:String>
+                                        <sys:String>لا</sys:String>
+                                    </x:Array>
+                                </DataGridComboBoxColumn.ItemsSource>
+                            </DataGridComboBoxColumn>
+                            <!-- §حتى تاريخ — يظهر/يُفعَّل فقط عندما تكون المعالجة = نعم -->
+                            <DataGridTemplateColumn Header="حتى تاريخ" Width="125">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DatePicker SelectedDate="{Binding TreatmentUntil, UpdateSourceTrigger=PropertyChanged}"
+                                                    FontSize="12" Padding="2,0,2,0"
+                                                    ToolTip="تاريخ انتهاء المعالجة — إلزامي عندما تكون المعالجة «نعم»">
+                                            <DatePicker.Style>
+                                                <Style TargetType="DatePicker">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding TreatmentChoice}" Value="نعم">
+                                                            <Setter Property="IsEnabled" Value="True"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </DatePicker.Style>
+                                        </DatePicker>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="حذف" Width="50">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>

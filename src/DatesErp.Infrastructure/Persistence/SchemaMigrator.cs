@@ -86,7 +86,47 @@ public static class SchemaMigrator
         // §المعالجة والتعقيم — الدفعات القائمة تُعتبر جاهزة (منع توقف الإنتاج عند الترقية)
         BackfillTreatmentReadiness(db, report);
 
+        // §المعالجة ضمن أمر الاستلام — حلّ قرار المعالجة للدفعات القديمة بلا قرار سطر (صريح ومسجّل)
+        BackfillLotTreatmentDecision(db, report);
+
         return report;
+    }
+
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — آلية صريحة ومسجّلة للدفعات القديمة التي لا تحمل قرار معالجة
+    /// على سطر الاستلام (<c>Lot.RequiresTreatment == null</c>).
+    ///
+    /// **لماذا؟** القرار الفعلي على سطر الاستلام (نعم/لا) هو مصدر الحقيقة، لكن الدفعات التي
+    /// أُنشئت قبل هذه الميزة لا قرار لها. هنا يُحلّ القرار مرة واحدة ويُخزَّن على الدفعة
+    /// (من سطر الاستلام إن وُجد، وإلا من بطاقة الصنف مرجعاً قديماً) ويُسجَّل في تقرير
+    /// الترحيل — فلا تُفترض الحالة بصمت، ولا يتغيّر سلوك الدفعة لاحقاً لو عُدّل علم البطاقة.
+    /// **آمن للتكرار:** يلمس فقط الدفعات ذات <c>null</c>، فبعد أول تشغيل لا يبقى منها شيء.
+    /// </summary>
+    private static void BackfillLotTreatmentDecision(DatesErpDbContext db, List<string> report)
+    {
+        try
+        {
+            var unresolved = db.Lots.Where(l => l.RequiresTreatment == null).ToList();
+            if (unresolved.Count == 0) return;
+
+            foreach (var lot in unresolved)
+            {
+                bool? fromItem = lot.ShipmentItemId != null
+                    ? db.ShipmentItems.Where(i => i.Id == lot.ShipmentItemId)
+                          .Select(i => i.RequiresTreatment).FirstOrDefault()
+                    : null;
+                lot.RequiresTreatment = fromItem
+                    ?? db.Products.Where(p => p.Id == lot.ProductId)
+                          .Select(p => p.RequiresTreatment).FirstOrDefault();
+            }
+            db.SaveChanges();
+            report.Add($"ترحيل قرار المعالجة: حُلّ قرار المعالجة لـ {unresolved.Count} دفعة قديمة بلا قرار سطر استلام "
+                       + "(من سطر الاستلام إن وُجد، وإلا من بطاقة الصنف مرجعاً قديماً — لم تُفترض الحالة بصمت).");
+        }
+        catch (Exception ex)
+        {
+            report.Add("تعذّر ترحيل قرار المعالجة للدفعات: " + ex.Message);
+        }
     }
 
     /// <summary>
@@ -282,6 +322,8 @@ public static class SchemaMigrator
         // §الحالة النشطة افتراضياً: أعمدة IsActive الفارغة تُملأ «نشط» (1) — لا «موقوف»،
         // حتى لا تختفي السجلات (عملاء/أصناف/موردون...) من القوائم المنسدلة
         if (prop.Name == "IsActive") return "1";
+        // §تعديلات العملاء: الخطة القائمة قبل هذه الميزة تُرحَّل للإصدار 1 (الأصلية) لا صفر
+        if (prop.Name == "RevisionNo") return "1";
 
         var t = Nullable.GetUnderlyingType(prop.ClrType) ?? prop.ClrType;
         if (t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)

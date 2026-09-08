@@ -44,6 +44,7 @@ public class DatesErpDbContext : DbContext
     // ── التخطيط والإنتاج ──
     public DbSet<ProductionPlan> ProductionPlans => Set<ProductionPlan>();
     public DbSet<ProductionPlanItem> ProductionPlanItems => Set<ProductionPlanItem>();
+    public DbSet<PlanAmendment> PlanAmendments => Set<PlanAmendment>();
     public DbSet<ProductionOrder> ProductionOrders => Set<ProductionOrder>();
     public DbSet<ProductionOrderItem> ProductionOrderItems => Set<ProductionOrderItem>();
     public DbSet<ProductionOrderMaterial> ProductionOrderMaterials => Set<ProductionOrderMaterial>();

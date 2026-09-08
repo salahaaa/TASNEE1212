@@ -12,8 +12,11 @@ namespace DatesErp.Desktop.Views.Screens;
 public partial class ReceivingView : UserControl
 {
     private List<object> _ship_all = new();
-    private class ItemRow
+    private class ItemRow : System.ComponentModel.INotifyPropertyChanged
     {
+        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+        private void OnChanged(string n) => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(n));
+
         public int RowNo { get; set; }
         public int ProductId { get; set; }
         public int? PackId { get; set; }
@@ -27,6 +30,35 @@ public partial class ReceivingView : UserControl
         public double QtyKg { get; set; }
         /// <summary>§استلام جزئي: مستلم | مرفوض/تالف | معلّق لاحقاً.</summary>
         public string Status { get; set; } = "مستلم";
+
+        private string _treatmentChoice;
+        /// <summary>§المعالجة ضمن أمر الاستلام: «نعم» | «لا» | فارغ (لم يُحدد بعد — إلزامي قبل الحفظ).</summary>
+        public string TreatmentChoice
+        {
+            get => _treatmentChoice;
+            set
+            {
+                if (_treatmentChoice == value) return;
+                _treatmentChoice = value;
+                OnChanged(nameof(TreatmentChoice));
+                // §عند العودة إلى «لا» (أو إفراغ الاختيار) يُمحى تاريخ المعالجة ولا يُعتمد
+                if (value != "نعم" && TreatmentUntil != null)
+                {
+                    TreatmentUntil = null;
+                }
+            }
+        }
+
+        private DateTime? _treatmentUntil;
+        /// <summary>§تاريخ انتهاء المعالجة — يُفعَّل ويُعتمد فقط عندما تكون المعالجة «نعم».</summary>
+        public DateTime? TreatmentUntil
+        {
+            get => _treatmentUntil;
+            set { if (_treatmentUntil != value) { _treatmentUntil = value; OnChanged(nameof(TreatmentUntil)); } }
+        }
+
+        /// <summary>§المخازن المتعددة — معرّف مخزن الخام الوجهة لهذا البند (خام/ثلاجة/خام 2...).</summary>
+        public int? WarehouseId { get; set; }
     }
 
     private static string StatusToCode(string ar) => ar switch
@@ -108,10 +140,13 @@ public partial class ReceivingView : UserControl
             var packsFromUnits = allPacks.Where(pk => unitNames.Contains(pk.PackageNameAr)).ToList();
             PackBox.ItemsSource = packsFromUnits.Count > 0 ? packsFromUnits : allPacks;
             // §المخازن المتعددة: مخازن الخام النشطة (رئيسي / خام 2 / ثلاجة...) — الافتراضي WRM أولًا
-            WarehouseBox.ItemsSource = db.Warehouses
+            var rawWarehouses = db.Warehouses
                 .Where(w => w.IsActive && w.WarehouseType == "Raw")
                 .OrderBy(w => w.WarehouseCode == "WRM" ? 0 : 1).ThenBy(w => w.Id).ToList();
+            WarehouseBox.ItemsSource = rawWarehouses;
             WarehouseBox.SelectedValue = db.Warehouses.Where(w => w.WarehouseCode == "WRM").Select(w => w.Id).FirstOrDefault();
+            // §المخازن المتعددة — نفس قائمة مخازن الخام في عمود «المخزن» لكل بند (توزيع الأصناف)
+            ItemWarehouseColumn.ItemsSource = rawWarehouses;
             // §الاستلام للخام مباشرة — بلا حقل مجموعة: أصناف المجموعة 001 أو بلا مجموعة
             ProductBox.ItemsSource = db.Products
                 .Where(p => p.IsActive && p.ItemType == "Raw")   // §B74: الخامات فقط حسب تصنيف شاشة الأصناف
@@ -343,7 +378,9 @@ public partial class ReceivingView : UserControl
             ReceiptUnit = pack?.PackageNameAr ?? "كرتون",
             PackageCount = count,
             UnitWeightKg = uw,
-            QtyKg = count * uw
+            QtyKg = count * uw,
+            // §المخازن المتعددة — الافتراضي مخزن السند، ويُعدَّل لكل بند في عمود «المخزن»
+            WarehouseId = WarehouseBox.SelectedValue as int?
         });
         PkgCountBox.Text = "0"; UnitWeightBox.Text = "0"; CalcTotalBox.Text = "";
     }
@@ -355,6 +392,41 @@ public partial class ReceivingView : UserControl
         if (sender is Button b && b.Tag is ItemRow row) _items.Remove(row);
     }
 
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — التحقق في الواجهة (قبل الـBackend):
+    ///  • المعالجة إلزامية (نعم/لا) ولا تُترك فارغة.
+    ///  • نعم ⟵ حتى تاريخ إلزامي.
+    ///  • حتى تاريخ ≥ تاريخ الاستلام (لا تاريخ معالجة في الماضي).
+    /// الـBackend يعيد نفس الحراس في ReceivingService.SaveShipment (لا اعتماد على الواجهة وحدها).
+    /// </summary>
+    private bool ValidateTreatmentFields()
+    {
+        var recv = (ReceivedDate.SelectedDate ?? DateTime.Now).Date;
+        foreach (var i in _items)
+        {
+            if (i.TreatmentChoice != "نعم" && i.TreatmentChoice != "لا")
+            {
+                AppContainer.Get<DialogService>().Error(
+                    $"البند ({i.RowNo}) «{i.ProductName}»: حدد المعالجة (نعم/لا) — لا تُترك فارغة.");
+                return false;
+            }
+            if (i.TreatmentChoice == "نعم" && i.TreatmentUntil == null)
+            {
+                AppContainer.Get<DialogService>().Error(
+                    $"البند ({i.RowNo}) «{i.ProductName}»: المعالجة «نعم» تتطلب تاريخ انتهاء المعالجة (حتى تاريخ).");
+                return false;
+            }
+            if (i.TreatmentChoice == "نعم" && i.TreatmentUntil?.Date < recv)
+            {
+                AppContainer.Get<DialogService>().Error(
+                    $"البند ({i.RowNo}) «{i.ProductName}»: تاريخ انتهاء المعالجة ({i.TreatmentUntil:dd/MM/yyyy}) " +
+                    $"يجب أن يكون أكبر من أو يساوي تاريخ الاستلام ({recv:dd/MM/yyyy}).");
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void Save()
     {
         try
@@ -363,6 +435,7 @@ public partial class ReceivingView : UserControl
             var cust = CustomerBox.SelectedItem as Core.Domain.Entities.Customer;
             if (cust == null) { AppContainer.Get<DialogService>().Error("اختر العميل المورد."); return; }
             if (_items.Count == 0) { AppContainer.Get<DialogService>().Error("أضف بنداً واحداً على الأقل."); return; }
+            if (!ValidateTreatmentFields()) return; // §المعالجة إلزامية + حتى تاريخ إلزامي عند «نعم»
             if (!CheckDuplicateContainer()) return; // §تحذير صارم قبل الحفظ
 
             using var scope = AppContainer.NewScope();
@@ -379,7 +452,10 @@ public partial class ReceivingView : UserControl
                     UnitWeightKg = i.UnitWeightKg,
                     QtyKg = i.QtyKg,
                     ReceiptUnit = i.ReceiptUnit,
-                    ItemStatus = StatusToCode(i.Status)
+                    ItemStatus = StatusToCode(i.Status),
+                    RequiresTreatment = i.TreatmentChoice == "نعم" ? true : i.TreatmentChoice == "لا" ? false : null,
+                    TreatmentUntil = i.TreatmentUntil?.ToString("dd/MM/yyyy"),
+                    WarehouseId = i.WarehouseId
                 }).ToList(),
                 NotesBox.Text, ContainerBox.Text, emp?.Id,
                 _currentId > 0 ? _currentId : null,
@@ -513,7 +589,10 @@ public partial class ReceivingView : UserControl
                     PackageCount = it.PackageCount,
                     UnitWeightKg = it.UnitWeightKg,
                     QtyKg = it.TotalWeightKg,
-                    Status = CodeToStatus(it.Status)
+                    Status = CodeToStatus(it.Status),
+                    TreatmentChoice = it.RequiresTreatment == true ? "نعم" : "لا",
+                    TreatmentUntil = it.TreatmentUntil,
+                    WarehouseId = it.DestinationWarehouseId
                 });
             }
             // §10 — المستند يعود كما حُفظ بالضبط ويظهر كاملاً في الواجهة الرئيسية

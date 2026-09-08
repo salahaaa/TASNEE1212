@@ -31,6 +31,21 @@ public class ShipmentItemDto
     public string ReceiptUnit { get; set; }
     /// <summary>§استلام جزئي: Received مستلم | Rejected مرفوض/تالف | Pending معلّق لاحقاً.</summary>
     public string ItemStatus { get; set; } = "Received";
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — نعم/لا على مستوى سطر الصنف.
+    /// null = «لا» (توافق مع البيانات والمسارات القديمة التي لا تمرر هذا الحقل).
+    /// </summary>
+    public bool? RequiresTreatment { get; set; }
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — تاريخ انتهاء المعالجة (صيغة dd/MM/yyyy).
+    /// إلزامي عندما يكون RequiresTreatment = true، ويُهمَل عندما يكون «لا».
+    /// </summary>
+    public string TreatmentUntil { get; set; }
+    /// <summary>
+    /// §المخازن المتعددة — معرّف مخزن الخام الوجهة لهذا البند (خام/ثلاجة/خام 2...).
+    /// فارغ = مخزن السند ReceivingWarehouseId ثم WRM. قرار على مستوى سطر الصنف.
+    /// </summary>
+    public int? WarehouseId { get; set; }
 }
 
 /// <summary>بند خطة إنتاج.</summary>
@@ -39,11 +54,18 @@ public class PlanItemDto
     public string SourceType { get; set; } = "Manual";
     public int? LotId { get; set; }
     public int? ShipmentId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُنقل إلى بند الخطة للتتبع.</summary>
+    public string ReceiptUnit { get; set; }
     public int? CustomerId { get; set; }
     public int ProductId { get; set; }
     public int? PackagingTypeId { get; set; }
     public double PlannedQtyKg { get; set; }
     public int PlannedCartons { get; set; }
+    /// <summary>
+    /// §تعديلات العملاء/الخطط المعقدة — نسبة السحب من الشحنة (0–100). إن حُددت تُشتق الكمية
+    /// تلقائياً من الكمية الفعلية المتاحة في الدفعة/الشحنة لحظة الحفظ، ولا حاجة لأرقام يدوية.
+    /// </summary>
+    public double? SourceRatioPct { get; set; }
     public string ScheduledDate { get; set; }
     public int? SuggestedShiftId { get; set; }
     public int? SuggestedLineId { get; set; }
@@ -58,6 +80,8 @@ public class OrderItemDto
     public int? PlanItemId { get; set; }
     public int? LotId { get; set; }
     public int? ShipmentId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُنقل من بند الخطة إلى بند الأمر.</summary>
+    public string ReceiptUnit { get; set; }
     public int? CustomerId { get; set; }
     public int ProductId { get; set; }
     public int? PackagingTypeId { get; set; }
@@ -77,6 +101,8 @@ public class OrderableItemDto
     public string CustomerName { get; set; }
     public int? LotId { get; set; }
     public string LotCode { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُعرض في شاشة تحويل الخطة إلى أوامر.</summary>
+    public string ReceiptUnit { get; set; }
     /// <summary>الصنف المستلم (الخام) — بالكيلو.</summary>
     public string RawName { get; set; }
     public double LotRemainingKg { get; set; }
@@ -189,6 +215,8 @@ public class FinishedGoodsItemDto
     public int ProductId { get; set; }
     public int? LotId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُنقل من بند الأمر إلى استلام التام.</summary>
+    public string ReceiptUnit { get; set; }
     public int PackageCount { get; set; }
     public double NetWeightKg { get; set; }
     public double? ReceivedQtyKg { get; set; }
@@ -206,6 +234,8 @@ public class ProductionDeliveryItemDto
     public int? LotId { get; set; }
     public int? CustomerId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُنقل إلى بند أمر تسليم الإنتاج.</summary>
+    public string ReceiptUnit { get; set; }
     public int PackageCount { get; set; }
     public double QtyKg { get; set; }
 }
@@ -276,6 +306,8 @@ public class CustomerDeliveryItemDto
     public int ProductId { get; set; }
     public int? LotId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُنقل إلى بند تسليم العميل.</summary>
+    public string ReceiptUnit { get; set; }
     public int PackageCount { get; set; }
     public double QtyKg { get; set; }
 }
@@ -371,6 +403,74 @@ public interface IPlanningService
     /// التحويل الرسمي، والالتزامات الحية) — ويحكم: قابلة للتنفيذ أم فيها عجز/تجاوز.
     /// </summary>
     PlanCheckResult CheckPlan(int planId, bool excludeFriday = true);
+}
+
+/// <summary>
+/// §تعديلات العملاء أثناء التنفيذ — خدمة تعديل الخطة المعتمدة (Change Request → Revision).
+/// لا تعديل صامت في مكانه: يُسجَّل طلب تعديل موثّق، وعند اعتماده يُوقَف المتبقي من البند
+/// الأصلي (مع حماية المنفذ) ويُنشأ إصدار جديد من الخطة بالصنف الجديد.
+/// </summary>
+public interface IPlanAmendmentService
+{
+    /// <summary>طلب تعديل خطة معتمدة (مسودة تعديل) — يوثّق كل التفاصيل ويُرجع معرف التعديل.</summary>
+    OpResult RequestAmendment(PlanAmendmentRequestDto dto);
+    /// <summary>اعتماد التعديل: تجميد المتبقي الأصلي + إنشاء إصدار جديد + فحص الطاقة — ذرّي.</summary>
+    OpResult ApproveAmendment(int amendmentId);
+    /// <summary>رفض التعديل (يبقى مسجلاً للتدقيق بحالة ملغاة).</summary>
+    OpResult RejectAmendment(int amendmentId, string reason);
+    /// <summary>سلسلة تعديلات خطة (تاريخ كامل: الأصلية + كل تعديل + الإصدارات الناتجة).</summary>
+    List<PlanAmendmentDto> GetPlanHistory(int planId);
+}
+
+/// <summary>§تعديلات العملاء — مدخلات طلب التعديل.</summary>
+public class PlanAmendmentRequestDto
+{
+    public int OriginalPlanId { get; set; }
+    public int PlanItemId { get; set; }
+    public int? SourceOrderId { get; set; }
+    public int? CustomerId { get; set; }
+    public int NewProductId { get; set; }
+    public int? NewPackagingTypeId { get; set; }
+    /// <summary>الكمية الجديدة (كجم). فارغ = المتبقي كاملاً.</summary>
+    public double? NewQtyKg { get; set; }
+    /// <summary>سبب التعديل (إلزامي).</summary>
+    public string Reason { get; set; }
+}
+
+/// <summary>§تعديلات العملاء — سجل التعديل للعرض والتاريخ الكامل.</summary>
+public class PlanAmendmentDto
+{
+    public int Id { get; set; }
+    public string DocumentNumber { get; set; }
+    public int OriginalPlanId { get; set; }
+    public string OriginalPlanNumber { get; set; }
+    public int? PlanItemId { get; set; }
+    public int? SourceOrderId { get; set; }
+    public int? CustomerId { get; set; }
+    public string CustomerName { get; set; }
+    public int? LotId { get; set; }
+    public string LotCode { get; set; }
+    public int? ShipmentId { get; set; }
+    public int OldProductId { get; set; }
+    public string OldProductName { get; set; }
+    public int NewProductId { get; set; }
+    public string NewProductName { get; set; }
+    public double OldQtyKg { get; set; }
+    public double ExecutedQtyKg { get; set; }
+    public double RemainingQtyKg { get; set; }
+    public double NewQtyKg { get; set; }
+    public string Reason { get; set; }
+    public string ExecutionState { get; set; }
+    public string Status { get; set; }
+    public string StatusAr { get; set; }
+    public string RequestedAt { get; set; }
+    public string RequestedBy { get; set; }
+    public string ApprovedBy { get; set; }
+    public string ApprovedAt { get; set; }
+    public string AppliedAt { get; set; }
+    public int? NewRevisionPlanId { get; set; }
+    public string NewRevisionPlanNumber { get; set; }
+    public int RevisionNo { get; set; }
 }
 
 /// <summary>§B91 — نتيجة فحص الخطة: حكم + توزيع الأيام + تغطية العملاء والأصناف + تحذيرات صاخبة.</summary>
@@ -483,6 +583,8 @@ public class FairPlanRowDto
     public string PackName { get; set; }
     public int PlannedCartons { get; set; }
     public double PlannedQtyKg { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — ليبقى البند المقترح مرتبطاً بوحدة استلامه.</summary>
+    public string ReceiptUnit { get; set; }
 }
 
 /// <summary>ملخص نصيب كل عميل من خطة التوزيع العادل — يشمل أيام إنتاجه.</summary>
@@ -568,6 +670,8 @@ public class AvailableLotDto
     public double InitialQtyKg { get; set; }
     public double ReservedQtyKg { get; set; }
     public double RemainingKg { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُعرض عند التخطيط ليطابق الإدخال وحدة الاستلام.</summary>
+    public string ReceiptUnit { get; set; }
 
     // §المعالجة والتعقيم — أعمدة العرض التي تفسّر الرقم بدل أن يبدو نقصاً غامضاً
     /// <summary>هل الصنف يشترط معالجة؟ إن كان false فبقية الحقول لا تُقيّد شيئاً.</summary>

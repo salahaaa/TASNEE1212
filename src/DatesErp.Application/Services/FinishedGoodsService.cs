@@ -166,6 +166,7 @@ public class FinishedGoodsService : ServiceBase, IFinishedGoodsService
                     CustomerId = effCust,
                     DeliveryItemId = effLine,
                     PackagingTypeId = it.PackagingTypeId,
+                    ReceiptUnit = it.ReceiptUnit ?? (it.LotId != null ? Db.Lots.Where(l => l.Id == it.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     PackageCount = it.PackageCount,
                     NetWeightKg = it.NetWeightKg,
                     ReceivedQtyKg = 0,

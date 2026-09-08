@@ -78,8 +78,8 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
             Db.RawTreatments.Add(t);
             Db.SaveChanges(); // للحصول على المعرف قبل قيد الحركة
 
-            // §حركة المخزون: خروج من الخام ودخول إلى مستودع المعالجة — بنفس الكمية
-            MoveStock(WarehouseId("WRM"), MovementType.Outbound, t, ReferenceDocType.TreatmentStart,
+            // §حركة المخزون: خروج من مخزن الدفعة (خام/ثلاجة...) ودخول إلى مستودع المعالجة — بنفس الكمية
+            MoveStock(lot.WarehouseId ?? WarehouseId("WRM"), MovementType.Outbound, t, ReferenceDocType.TreatmentStart,
                 t.TreatmentNo, dto.QtyKg, dto.PackageCount, lot, $"بدء معالجة {t.TreatmentNo}");
             MoveStock(WarehouseId("WTRT"), MovementType.Inbound, t, ReferenceDocType.TreatmentStart,
                 t.TreatmentNo, dto.QtyKg, dto.PackageCount, lot, $"بدء معالجة {t.TreatmentNo}");
@@ -112,9 +112,10 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
         var t = Db.RawTreatments.FirstOrDefault(x => x.Id == treatmentId);
         if (t == null) return OpResult.Fail("عملية المعالجة غير موجودة.");
 
-        // §الوجهة محصورة في مخزنين معلومين — لا يُمرَّر كود حر إلى حركة مخزون.
-        string dest = string.IsNullOrWhiteSpace(destWarehouseCode) ? "WRM" : destWarehouseCode.Trim().ToUpperInvariant();
-        if (dest != "WRM" && dest != "WFG")
+        // §الوجهة محصورة في خيارات معلومة — لا يُمرَّر كود حر إلى حركة مخزون.
+        // «WRM» الآن تعني «مخزن الدفعة» (خام/ثلاجة/خام 2...) لا المخزن الوحيد القديم.
+        string destCode = string.IsNullOrWhiteSpace(destWarehouseCode) ? null : destWarehouseCode.Trim().ToUpperInvariant();
+        if (destCode != null && destCode != "WRM" && destCode != "WFG")
             return OpResult.Fail("وجهة الإفراج غير صالحة — المسموح: مخزن الخام (WRM) أو مخزن التام (WFG).");
 
 
@@ -145,6 +146,11 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
             var lot = Db.Lots.First(l => l.Id == t.LotId);
             int packages = ProportionalPackages(t, qtyKg);
 
+            // §المخازن المتعددة — وجهة الإفراج: مخزن الدفعة (خام/ثلاجة/خام 2...) افتراضاً،
+            // و«WFG» مخزن التام للبضاعة التي لا تمر بخط الإنتاج. مخزن الدفعة محفوظ عليها
+            // عند الاستلام فلا تفقد وجهتها المبرّدة/الخام أبداً.
+            int destWhId = destCode == "WFG" ? WarehouseId("WFG") : (lot.WarehouseId ?? WarehouseId("WRM"));
+
             // §رقم مرجعي فريد لكل إفراج: حارس التكرار في PostStockMovement يقارن
             // (المستند + النوع + المخزن + الدفعة)، فلو تكرر رقم العملية لرُفض الإفراج
             // الجزئي الثاني بوصفه تكراراً — وهو إفراج مشروع لا تكرار.
@@ -152,15 +158,15 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
 
             MoveStock(WarehouseId("WTRT"), MovementType.Outbound, t, ReferenceDocType.TreatmentRelease,
                 refNo, qtyKg, packages, lot, notes ?? $"إفراج من معالجة {t.TreatmentNo}");
-            MoveStock(WarehouseId(dest), MovementType.Inbound, t, ReferenceDocType.TreatmentRelease,
+            MoveStock(destWhId, MovementType.Inbound, t, ReferenceDocType.TreatmentRelease,
                 refNo, qtyKg, packages, lot,
-                notes ?? $"إفراج من معالجة {t.TreatmentNo} إلى {(dest == "WFG" ? "مخزن التام" : "مخزن الخام")}");
+                notes ?? $"إفراج من معالجة {t.TreatmentNo} إلى {(destCode == "WFG" ? "مخزن التام" : "مخزن الخام")}");
 
             t.ReleasedQtyKg += qtyKg;
             lot.UnderTreatmentQtyKg = Math.Max(0, lot.UnderTreatmentQtyKg - qtyKg);
             // §B106: «جاهز للإنتاج» رصيدُ خامٍ متاح للتصنيع. فإن خرجت الكمية إلى مخزن
             // التام مباشرةً فهي لم تعد خاماً متاحاً، وزيادته هنا كانت ستحتسبها مرتين.
-            if (dest == "WRM") lot.TreatmentReadyQtyKg += qtyKg;
+            if (destCode != "WFG") lot.TreatmentReadyQtyKg += qtyKg;
 
             bool finished = t.RemainingQtyKg <= 0.001;
             if (finished)
@@ -249,7 +255,7 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
             // عكس كامل لقيدَي البدء
             MoveStock(WarehouseId("WTRT"), MovementType.Outbound, t, ReferenceDocType.TreatmentRelease,
                 refNo, t.QtyKg, t.PackageCount, lot, $"إلغاء بدء معالجة {t.TreatmentNo}: {reason}");
-            MoveStock(WarehouseId("WRM"), MovementType.Inbound, t, ReferenceDocType.TreatmentRelease,
+            MoveStock(lot.WarehouseId ?? WarehouseId("WRM"), MovementType.Inbound, t, ReferenceDocType.TreatmentRelease,
                 refNo, t.QtyKg, t.PackageCount, lot, $"إلغاء بدء معالجة {t.TreatmentNo}: {reason}");
 
             lot.UnderTreatmentQtyKg = Math.Max(0, lot.UnderTreatmentQtyKg - t.QtyKg);
@@ -338,8 +344,11 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
             NotTreatedQtyKg = Math.Max(0, lot.InStockQtyKg - lot.UnderTreatmentQtyKg - lot.TreatmentReadyQtyKg),
             ReservedQtyKg = lot.ReservedQtyKg,
             AvailableQtyKg = lot.AvailableQtyKg,
-            RequiresTreatment = Db.Products.AsNoTracking()
-                .Where(p => p.Id == lot.ProductId).Select(p => p.RequiresTreatment).FirstOrDefault()
+            // §المعالجة ضمن أمر الاستلام — قرار سطر الاستلام/الدفعة هو مصدر الحقيقة،
+            // وعلم بطاقة الصنف مرجع افتراضي للدفعات القديمة بلا قرار سطر (null).
+            RequiresTreatment = lot.RequiresTreatment
+                ?? Db.Products.AsNoTracking()
+                    .Where(p => p.Id == lot.ProductId).Select(p => p.RequiresTreatment).FirstOrDefault()
         };
     }
 
@@ -348,11 +357,14 @@ public class RawTreatmentService : ServiceBase, IRawTreatmentService
         var lot = Db.Lots.AsNoTracking().FirstOrDefault(l => l.Id == lotId);
         if (lot == null) return 0;
 
-        bool requires = Db.Products.AsNoTracking()
-            .Where(p => p.Id == lot.ProductId).Select(p => p.RequiresTreatment).FirstOrDefault();
+        // §المعالجة ضمن أمر الاستلام — قرار سطر الاستلام/الدفعة هو مصدر الحقيقة،
+        // وعلم بطاقة الصنف مرجع افتراضي للدفعات القديمة بلا قرار سطر (null).
+        bool requires = lot.RequiresTreatment
+            ?? Db.Products.AsNoTracking()
+                .Where(p => p.Id == lot.ProductId).Select(p => p.RequiresTreatment).FirstOrDefault();
 
-        // §الصنف الذي لا يشترط معالجة: المتاح هو المخزون غير المحجوز كالسابق تماماً
-        // (قرار المستخدم س3) — وإلا عُطّلت خطوط إنتاج لا علاقة لها بالتعقيم.
+        // §الدفعة التي لا تشترط معالجة: المتاح هو المخزون غير المحجوز كالسابق تماماً
+        // — وإلا عُطّلت خطوط إنتاج لا علاقة لها بالتعقيم.
         if (!requires)
             return Math.Max(0, lot.InStockQtyKg - lot.ReservedQtyKg - lot.UnderTreatmentQtyKg);
 

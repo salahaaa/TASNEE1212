@@ -144,6 +144,7 @@ public class DayRunService : ServiceBase, IDayRunService
                     PlanItemId = v.Item.Id,
                     LotId = v.Item.LotId,
                     ShipmentId = v.Item.ShipmentId,
+                    ReceiptUnit = v.Item.ReceiptUnit,
                     CustomerId = v.Item.CustomerId,
                     ProductId = v.Item.ProductId,
                     PackagingTypeId = v.Item.PackagingTypeId,

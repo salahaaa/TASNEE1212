@@ -64,6 +64,21 @@ public class PlanningService : ServiceBase, IPlanningService
                 dtoInh.SuggestedShiftId ??= shiftId;
                 dtoInh.SuggestedLineId ??= lineId;
             }
+            // §تعديلات العملاء/الخطط المعقدة — نسبة السحب من الشحنة: تُشتق الكمية تلقائياً
+            // من المتاح الفعلي في الدفعة (لا أرقام يدوية: 50% من شحنة = نصف متاحها لحظة الحفظ).
+            foreach (var dtoRatio in items)
+            {
+                if (dtoRatio.SourceRatioPct is double pct && dtoRatio.LotId is int rLot)
+                {
+                    if (pct <= 0 || pct > 100)
+                        throw new DomainException("نسبة السحب من الشحنة يجب أن تكون بين 1 و100.");
+                    var rl = Db.Lots.AsNoTracking().FirstOrDefault(l => l.Id == rLot)
+                             ?? throw new DomainException("الدفعة المحددة للنسبة غير موجودة.");
+                    double avail = Math.Max(0, rl.InStockQtyKg - rl.UnderTreatmentQtyKg);
+                    dtoRatio.PlannedQtyKg = Math.Round(avail * pct / 100.0, 1);
+                    dtoRatio.SourceRatioPct = null; // اشتُقت الكمية — لا إعادة اشتقاق لاحقاً
+                }
+            }
             // §إصلاح حرج: تراكم استهلاك بنود «هذه الخطة نفسها» على نفس اليوم/الوردية/الخط.
             var localUsed = new Dictionary<(DateTime day, int shift, int line), double>();
             var capWarnings = new List<string>(); // §B85/H4: تنبيهات الطاقة غير المعرَّفة
@@ -114,6 +129,7 @@ public class PlanningService : ServiceBase, IPlanningService
                     SourceType = dto.SourceType,
                     LotId = dto.LotId,
                     ShipmentId = dto.ShipmentId ?? (dto.LotId != null ? Db.Lots.Where(l => l.Id == dto.LotId).Select(l => l.ShipmentId).FirstOrDefault() : null),
+                    ReceiptUnit = dto.ReceiptUnit ?? (dto.LotId != null ? Db.Lots.Where(l => l.Id == dto.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     CustomerId = dto.CustomerId,
                     ProductId = dto.ProductId,
                     PackagingTypeId = dto.PackagingTypeId,
@@ -190,6 +206,20 @@ public class PlanningService : ServiceBase, IPlanningService
                 dtoInh.SuggestedShiftId ??= shiftId;
                 dtoInh.SuggestedLineId ??= lineId;
             }
+            // §تعديلات العملاء/الخطط المعقدة — نسبة السحب من الشحنة (نفس منطق SavePlan).
+            foreach (var dtoRatio in items)
+            {
+                if (dtoRatio.SourceRatioPct is double pct && dtoRatio.LotId is int rLot)
+                {
+                    if (pct <= 0 || pct > 100)
+                        throw new DomainException("نسبة السحب من الشحنة يجب أن تكون بين 1 و100.");
+                    var rl = Db.Lots.AsNoTracking().FirstOrDefault(l => l.Id == rLot)
+                             ?? throw new DomainException("الدفعة المحددة للنسبة غير موجودة.");
+                    double avail = Math.Max(0, rl.InStockQtyKg - rl.UnderTreatmentQtyKg);
+                    dtoRatio.PlannedQtyKg = Math.Round(avail * pct / 100.0, 1);
+                    dtoRatio.SourceRatioPct = null;
+                }
+            }
             // §إصلاح حرج: تراكم استهلاك بنود «هذه الخطة نفسها» على نفس اليوم/الوردية/الخط.
             var localUsed = new Dictionary<(DateTime day, int shift, int line), double>();
             var capWarnings = new List<string>(); // §B85/H4: تنبيهات الطاقة غير المعرَّفة
@@ -237,6 +267,7 @@ public class PlanningService : ServiceBase, IPlanningService
                     SourceType = dto.SourceType,
                     LotId = dto.LotId,
                     ShipmentId = dto.ShipmentId ?? (dto.LotId != null ? Db.Lots.Where(l => l.Id == dto.LotId).Select(l => l.ShipmentId).FirstOrDefault() : null),
+                    ReceiptUnit = dto.ReceiptUnit ?? (dto.LotId != null ? Db.Lots.Where(l => l.Id == dto.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     CustomerId = dto.CustomerId,
                     ProductId = dto.ProductId,
                     PackagingTypeId = dto.PackagingTypeId,
@@ -304,13 +335,17 @@ public class PlanningService : ServiceBase, IPlanningService
 
         var lotIds = demand.Select(d => d.LotId).Distinct().ToList();
         var lots = Db.Lots.AsNoTracking().Where(l => lotIds.Contains(l.Id)).ToList();
+        // §المعالجة ضمن أمر الاستلام — مرجع بطاقة الصنف للدفعات القديمة بلا قرار سطر.
         var gated = Db.Products.AsNoTracking()
             .Where(p => p.RequiresTreatment).Select(p => p.Id).ToHashSet();
 
         foreach (var d in demand.OrderBy(x => x.Day))
         {
             var lot = lots.FirstOrDefault(l => l.Id == d.LotId);
-            if (lot == null || !gated.Contains(lot.ProductId)) continue; // صنف لا يشترط معالجة
+            if (lot == null) continue;
+            // قرار سطر الاستلام/الدفعة هو مصدر الحقيقة؛ null ترجع لبطاقة الصنف مرجعاً.
+            bool requires = lot.RequiresTreatment ?? gated.Contains(lot.ProductId);
+            if (!requires) continue; // دفعة لا تشترط معالجة
 
             var end = d.Day.AddDays(1).AddTicks(-1);
             var live = Db.RawTreatments.AsNoTracking()
@@ -352,7 +387,7 @@ public class PlanningService : ServiceBase, IPlanningService
         return null;
     }
 
-    private void ApplyLotReservations(ProductionPlan plan)
+    internal void ApplyLotReservations(ProductionPlan plan)
     {
         // تصفير حجوزات هذه الخطة السابقة ثم إعادة الاحتساب — يدعم التعديل متعدد الأصناف
         var lotIds = plan.Items.Where(i => i.LotId != null).Select(i => i.LotId.Value).Distinct().ToList();
@@ -386,7 +421,7 @@ public class PlanningService : ServiceBase, IPlanningService
     /// تلزم بعد حذف خطة: <see cref="ApplyLotReservations"/> تبني الحجز حول خطة قائمة،
     /// وهنا لم تعد قائمة، فيُجمع المتبقي من الخطط النشطة وحدها.
     /// </summary>
-    private void RecomputeLotReservations(List<int> lotIds)
+    internal void RecomputeLotReservations(List<int> lotIds)
     {
         foreach (var lid in lotIds ?? new List<int>())
         {
@@ -656,10 +691,14 @@ public class PlanningService : ServiceBase, IPlanningService
                 ShipmentId = l.ShipmentId,
                 ShipmentNo = Db.Shipments.Where(x => x.Id == l.ShipmentId).Select(x => x.DocumentNumber).FirstOrDefault(),
                 ArrivalDate = Db.Shipments.Where(x => x.Id == l.ShipmentId).Select(x => x.ArrivalDate).FirstOrDefault(),
+                ReceiptUnit = l.ReceiptUnit,
                 InitialQtyKg = l.InitialQtyKg,
                 ReservedQtyKg = l.ReservedQtyKg,
-                RequiresTreatment = Db.Products.Where(p => p.Id == l.ProductId)
-                                      .Select(p => p.RequiresTreatment).FirstOrDefault(),
+                // §المعالجة ضمن أمر الاستلام — قرار سطر الاستلام/الدفعة هو مصدر الحقيقة،
+                // وعلم بطاقة الصنف مرجع افتراضي للدفعات القديمة بلا قرار سطر (null).
+                RequiresTreatment = l.RequiresTreatment
+                    ?? Db.Products.Where(p => p.Id == l.ProductId)
+                                  .Select(p => p.RequiresTreatment).FirstOrDefault(),
                 ReadyNowKg = l.TreatmentReadyQtyKg,
                 UnderTreatmentKg = l.UnderTreatmentQtyKg,
                 // §B64: AvailableQtyKg خاصية محسوبة غير مخزّنة — لا تُترجم في استعلام خادمي؛
@@ -907,7 +946,8 @@ public class PlanningService : ServiceBase, IPlanningService
             {
                 Id = l.Id, LotCode = l.LotCode, CustomerId = cid, ShipmentId = l.ShipmentId,
                 RawProductId = l.ProductId, Remaining = remaining,
-                ArrivalDate = s?.ArrivalDate, ContainerNumber = s?.ContainerNumber, ShipmentNo = s?.DocumentNumber
+                ArrivalDate = s?.ArrivalDate, ContainerNumber = s?.ContainerNumber, ShipmentNo = s?.DocumentNumber,
+                ReceiptUnit = l.ReceiptUnit
             };
             seed.DaysInStock = seed.ArrivalDate != null ? Math.Max(0, (today - seed.ArrivalDate.Value.Date).Days) : 0;
             b.Lots.Add(seed);
@@ -993,7 +1033,8 @@ public class PlanningService : ServiceBase, IPlanningService
                             PackagingTypeId = packId,
                             PackName = packs.First(p => p.Id == packId).PackageNameAr,
                             PlannedCartons = cartons,
-                            PlannedQtyKg = kg
+                            PlannedQtyKg = kg,
+                            ReceiptUnit = lot.ReceiptUnit ?? "—"
                         });
                         if (!next.Days.Contains(day)) next.Days.Add(day);
                         producedDays.Add(day);
@@ -1049,6 +1090,7 @@ public class PlanningService : ServiceBase, IPlanningService
         public int Id; public string LotCode; public int? CustomerId; public int? ShipmentId;
         public int RawProductId; public double Remaining; public DateTime? ArrivalDate;
         public string ContainerNumber; public string ShipmentNo; public int DaysInStock;
+        public string ReceiptUnit;
         /// <summary>§B87: عدّاد الدوّار بين الأصناف المسموحة لهذه الدفعة.</summary>
         public int PickNo;
     }

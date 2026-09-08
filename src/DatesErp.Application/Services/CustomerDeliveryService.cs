@@ -80,6 +80,7 @@ public class CustomerDeliveryService : ServiceBase, ICustomerDeliveryService
                     ProductId = it.ProductId,
                     LotId = it.LotId,
                     PackagingTypeId = it.PackagingTypeId,
+                    ReceiptUnit = it.ReceiptUnit ?? (it.LotId != null ? Db.Lots.Where(l => l.Id == it.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     PackageCount = it.PackageCount,
                     QtyKg = it.QtyKg,
                     // §القاعدة 7: وزن الكرتون وقت التسليم — لا يتغير بتعريف العبوة لاحقاً
@@ -128,6 +129,7 @@ public class CustomerDeliveryService : ServiceBase, ICustomerDeliveryService
                     ProductId = it.ProductId,
                     LotId = it.LotId,
                     PackagingTypeId = it.PackagingTypeId,
+                    ReceiptUnit = it.ReceiptUnit ?? (it.LotId != null ? Db.Lots.Where(l => l.Id == it.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     PackageCount = it.PackageCount,
                     QtyKg = it.QtyKg,
                     CartonWeightKg = UnitsPolicy.CartonWeight(Db, it.ProductId, it.PackagingTypeId)

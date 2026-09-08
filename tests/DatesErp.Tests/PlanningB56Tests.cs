@@ -41,22 +41,30 @@ public class PlanningB56Tests
     }
 
     [Fact]
-    public void Planning_Screen_Horizontal_Specs_And_Filling_Items_Grid()
+    public void Planning_Screen_Is_A_Readonly_Plans_List_With_DoubleClick_Detail()
     {
-        // §B61: المحددات صفوف أفقية ملتفة بلا سكرولر علوي يقتطع، وجدول البنود يملأ بلا ارتفاع ثابت.
+        // §شاشة الخطط أصبحت جدول الخطط المحفوظة فقط — نقر مزدوج يفتح التفاصيل للاطلاع
+        // لا نموذج اختيار الأصناف، وبدون لوحات «بنود اليوم» / «حالة أيام الخطة» / «تقدم كل عميل».
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "DateERP.sln"))) dir = dir.Parent;
         var xaml = File.ReadAllText(Path.Combine(dir!.FullName, "src/DatesErp.Desktop/Views/Screens/PlanningView.xaml"));
-        // §B66: صفحة واحدة قابلة للتمرير — لا شيء يختفي على أي حجم نافذة
-        Assert.Contains("<ScrollViewer", xaml);
-        Assert.DoesNotContain("MaxHeight=\"252\"", xaml);
-        int rg = xaml.IndexOf("x:Name=\"RowsGrid\"", StringComparison.Ordinal);
-        Assert.True(rg >= 0, "جدول البنود مفقود.");
-        string tag = xaml.Substring(rg, xaml.IndexOf('>', rg) - rg);
+        var cs = File.ReadAllText(Path.Combine(dir.FullName, "src/DatesErp.Desktop/Views/Screens/PlanningView.xaml.cs"));
+
+        // جدول الخطط المحفوظة موجود ويملأ المساحة (بلا ارتفاع ثابت) مع نقر مزدوج
+        int pg = xaml.IndexOf("x:Name=\"PlansGrid\"", StringComparison.Ordinal);
+        Assert.True(pg >= 0, "جدول الخطط المحفوظة مفقود.");
+        string tag = xaml.Substring(pg, xaml.IndexOf('>', pg) - pg);
         Assert.DoesNotContain(" Height=", tag);
-        Assert.Contains("MinHeight=\"260\"", xaml);          // ارتفاع مضمون لجدول البنود
-        Assert.True(xaml.IndexOf("<WrapPanel", StringComparison.Ordinal) < rg,
-            "المحددات يجب أن تسبق الجدول كصفوف أفقية ملتفة.");
+        Assert.Contains("MouseDoubleClick=\"PlansGrid_DoubleClick\"", tag);
+
+        // اللوحات الثلاث المحذوفة لا وجود لها
+        Assert.DoesNotContain("DailyGrid", xaml);
+        Assert.DoesNotContain("DaysGrid", xaml);
+        Assert.DoesNotContain("CustomersProgGrid", xaml);
+
+        // النقر المزدوج يفتح نافذة التفاصيل (قراءة فقط) لا نموذج اختيار الأصناف
+        Assert.Contains("PlanDetailWindow", cs);
+        Assert.DoesNotContain("OpenLotsEditor", cs);
     }
 
     [Fact]

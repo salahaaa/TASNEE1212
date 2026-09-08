@@ -176,6 +176,35 @@
                     </DataGrid.Columns>
                 </DataGrid>
             </TabItem>
+
+            <!-- §تعديلات العملاء أثناء التنفيذ — سلسلة التعديلات (طلب/اعتماد/رفض + الإصدارات) -->
+            <TabItem Header="🔁 تعديلات العملاء">
+                <DockPanel Margin="8">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button x:Name="BtnAmendRequest" Content="➕ طلب تعديل (تغيير صنف)" Style="{StaticResource ErpPrimaryButton}" Margin="0,0,8,0" Click="AmendRequest_Click"/>
+                        <Button x:Name="BtnAmendApprove" Content="✅ اعتماد التعديل المحدد" Style="{StaticResource ErpApproveButton}" Margin="0,0,8,0" Click="AmendApprove_Click"/>
+                        <Button x:Name="BtnAmendReject" Content="↩️ رفض التعديل المحدد" Style="{StaticResource ErpButton}" Click="AmendReject_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="AmendHint" DockPanel.Dock="Bottom" FontSize="11" Foreground="#7A5C00" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <DataGrid x:Name="AmendGrid" IsReadOnly="True" FontSize="11" AutoGenerateColumns="False"
+                              SelectionMode="Single" SelectionChanged="AmendGrid_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="رقم التعديل" Binding="{Binding DocumentNumber}" Width="95"/>
+                            <DataGridTextColumn Header="الحالة" Binding="{Binding StatusAr}" Width="70"/>
+                            <DataGridTextColumn Header="الخطة الأصلية" Binding="{Binding OriginalPlanNumber}" Width="100"/>
+                            <DataGridTextColumn Header="الصنف القديم" Binding="{Binding OldProductName}" Width="110"/>
+                            <DataGridTextColumn Header="الصنف الجديد" Binding="{Binding NewProductName}" Width="110"/>
+                            <DataGridTextColumn Header="المخطط" Binding="{Binding OldQtyKg}" Width="70"/>
+                            <DataGridTextColumn Header="المنفذ" Binding="{Binding ExecutedQtyKg}" Width="70"/>
+                            <DataGridTextColumn Header="المتبقي" Binding="{Binding RemainingQtyKg}" Width="70"/>
+                            <DataGridTextColumn Header="الجديدة" Binding="{Binding NewQtyKg}" Width="70"/>
+                            <DataGridTextColumn Header="السبب" Binding="{Binding Reason}" Width="*"/>
+                            <DataGridTextColumn Header="الإصدار الجديد" Binding="{Binding NewRevisionPlanNumber}" Width="100"/>
+                            <DataGridTextColumn Header="طالب التعديل" Binding="{Binding RequestedBy}" Width="110"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

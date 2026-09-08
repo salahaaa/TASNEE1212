@@ -206,20 +206,26 @@ public abstract class ServiceBase
     }
 
     /// <summary>
-    /// §المعالجة والتعقيم — يمنع صرف كمية لم تكتمل معالجتها.
+    /// §المعالجة ضمن أمر الاستلام — يمنع صرف كمية لم تكتمل معالجتها.
     ///
-    /// **لا يُطبَّق إلا على صنف عليه علم <c>RequiresTreatment</c>** (قرار المستخدم س3):
-    /// التمور المجففة وغيرها لا تحتاج تعقيماً، والإلزام الشامل كان سيعطّل خطوطاً
-    /// لا علاقة لها بالموضوع.
+    /// **مصدر الحقيقة = قرار المعالجة على سطر الاستلام/الدفعة** (<see cref="Lot.RequiresTreatment"/>)
+    /// لا علم بطاقة الصنف <c>Product.RequiresTreatment</c>. نفس الصنف قد يصل في شحنة تحتاج
+    /// معالجة وأخرى لا، فالقرار يُؤخذ من الدفعة نفسها كي لا تختلط الكميات لنفس الصنف.
+    ///
+    /// <c>Product.RequiresTreatment</c> يبقى إعداداً عاماً/مرجعياً للتوافق مع البيانات القديمة:
+    /// يُستعمل **مرة واحدة** كمرجع افتراضي للدفعة التي لا تحمل قرار سطر (<c>null</c>) —
+    /// وتُحلّ تلك الحالة صراحةً في ترحيل المخطط (لا تُفترض بصمت هنا).
     ///
     /// المتاح للصرف = <c>TreatmentReadyQtyKg</c> − ما استُهلك منه سابقاً. ويُشتق
     /// المستهلك من <c>ProducedQtyKg</c> بدل عمود جديد، فلا مصدر حقيقة ثانٍ يتناقض.
     /// </summary>
     protected void GuardTreatedStock(Lot lot, double qtyKg)
     {
-        bool requires = Db.Products.AsNoTracking()
-            .Where(p => p.Id == lot.ProductId)
-            .Select(p => p.RequiresTreatment).FirstOrDefault();
+        // قرار السطر يعلو؛ null (دفعة قديمة) ترجع لبطاقة الصنف كمرجع افتراضي فقط.
+        bool requires = lot.RequiresTreatment
+            ?? Db.Products.AsNoTracking()
+                .Where(p => p.Id == lot.ProductId)
+                .Select(p => p.RequiresTreatment).FirstOrDefault();
         if (!requires) return;
 
         double readyLeft = lot.TreatmentReadyQtyKg - lot.ProducedQtyKg;

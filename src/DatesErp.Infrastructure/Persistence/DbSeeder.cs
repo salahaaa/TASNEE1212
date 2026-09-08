@@ -106,6 +106,10 @@ public static class DbSeeder
         // بنمط «إن لم يوجد» كسابقه: البذر يمر على قواعد قائمة فلا يكرر الصف.
         if (!db.Warehouses.Any(w => w.WarehouseCode == "WTRT"))
             db.Warehouses.Add(new Warehouse { WarehouseCode = "WTRT", WarehouseNameAr = "مستودع المعالجة والتعقيم", WarehouseType = "Treatment" });
+        // §المخازن المتعددة — مخزن خام مبرّد (الثلاجة): التمر الممتاز يتلف بالانتظار فيُحفظ
+        // مبرّداً حتى دوره في التصنيع. مخزن خام كامل (Raw) لا خطوة معالجة.
+        if (!db.Warehouses.Any(w => w.WarehouseCode == "WCLD"))
+            db.Warehouses.Add(new Warehouse { WarehouseCode = "WCLD", WarehouseNameAr = "مخزن الخام المبرّد (الثلاجة)", WarehouseType = "Raw" });
         if (!db.TreatmentTypes.Any())
             db.TreatmentTypes.AddRange(
                 new TreatmentType { TypeCode = "TRT-HEAT", TypeNameAr = "تعقيم حراري", DefaultDurationHours = 6, RequiresQualityCheck = true },
@@ -258,7 +262,8 @@ public static class DbSeeder
             new NumberingScheme { SchemeCode = "PCL", SchemeName = "إقفال خطة", Prefix = "PCL", LastSequence = 0 },
             new NumberingScheme { SchemeCode = "LOT", SchemeName = "دفعة خام", Prefix = "LOT", LastSequence = 0 },
             new NumberingScheme { SchemeCode = "TASK", SchemeName = "مهمة سير عمل", Prefix = "TSK", LastSequence = 0 },
-            new NumberingScheme { SchemeCode = "TRT", SchemeName = "معالجة وتعقيم", Prefix = "TRT", LastSequence = 0 });   // §B103: كان مفقوداً — التشخيص يلتقطه والقواعد القائمة يعالجها الإصلاح الذاتي في NumberingService
+            new NumberingScheme { SchemeCode = "TRT", SchemeName = "معالجة وتعقيم", Prefix = "TRT", LastSequence = 0 },
+            new NumberingScheme { SchemeCode = "AMD", SchemeName = "تعديل خطة إنتاج", Prefix = "AMD", LastSequence = 0 });   // §B106: تعديلات العملاء أثناء التنفيذ
 
         // ── إصدار قاعدة البيانات (§31) ──
         db.DbVersions.Add(new DbVersion { VersionNumber = "1.0.0", Description = "الإصدار الأولي — المخطط الكامل" });
@@ -268,7 +273,7 @@ public static class DbSeeder
     }
 
     /// <summary>هدف ترقية البيانات المرجعية الحالي — يُخزَّن في SystemSettings لمنع التكرار.</summary>
-    public const string RefDataUpgradeTarget = "B104";   // §B104: هدف جديد ليعاد تنفيذ الترقية على القواعد القائمة
+    public const string RefDataUpgradeTarget = "B106";   // §B106: هدف جديد (تعديل خطة AMD) ليعاد تنفيذ الترقية على القواعد القائمة
 
     /// <summary>
     /// §ترقية البيانات المرجعية على القواعد القائمة — تُشغَّل عند الإقلاع بعد ترحيل المخطط.
@@ -351,6 +356,7 @@ public static class DbSeeder
         foreach (var wh in new[]
         {
             ("WRM", "مخزن المواد الخام", "Raw"),
+            ("WCLD", "مخزن الخام المبرّد (الثلاجة)", "Raw"),
             ("WFG", "مخزن الإنتاج التام", "Finished"),
             ("WAUX", "مخزن المواد المساعدة", "Auxiliary"),
             ("WPK", "مخزن الكرتون والتغليف", "Pack"),
@@ -370,6 +376,7 @@ public static class DbSeeder
             ("RCV", "سند استلام", "RCV"), ("CD", "تسليم عميل", "CD"), ("TXN", "حركة مخزون", "INV"),
             ("PCL", "إقفال خطة", "PCL"), ("LOT", "دفعة خام", "LOT"),
             ("TASK", "مهمة سير عمل", "TSK"), ("TRT", "معالجة وتعقيم", "TRT"),
+            ("AMD", "تعديل خطة إنتاج", "AMD"),
         })
         {
             if (!db.NumberingSchemes.Any(x => x.SchemeCode == sch.Item1))

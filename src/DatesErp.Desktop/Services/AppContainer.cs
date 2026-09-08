@@ -31,6 +31,8 @@ public static class AppContainer
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IReceivingService, ReceivingService>();
         services.AddScoped<IPlanningService, PlanningService>();
+        services.AddScoped<PlanningService>();
+        services.AddScoped<IPlanAmendmentService, PlanAmendmentService>();
         services.AddScoped<IPlanClosureService, PlanClosureService>();
         services.AddScoped<IProductionOrderService, ProductionOrderService>();
         services.AddScoped<IExecutionService, ExecutionService>();

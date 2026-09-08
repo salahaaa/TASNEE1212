@@ -35,6 +35,73 @@ public partial class PlanDetailWindow : Window
         Load();
     }
 
+    // ═══════════════ §تعديلات العملاء أثناء التنفيذ ═══════════════
+
+    private void AmendRequest_Click(object sender, RoutedEventArgs e)
+    {
+        var w = new Views.PlanAmendmentWindow(_planId) { Owner = this };
+        w.ShowDialog();
+        Load();
+    }
+
+    private void AmendApprove_Click(object sender, RoutedEventArgs e)
+    {
+        if (AmendGrid.SelectedItem is not PlanAmendmentDto am)
+        {
+            AppContainer.Get<DialogService>().Error("اختر طلب تعديل من الشبكة أولاً.");
+            return;
+        }
+        if (!AppContainer.Get<DialogService>().Confirm(
+            $"اعتماد التعديل {am.DocumentNumber}:\n" +
+            $"• الصنف: {am.OldProductName} ← {am.NewProductName}\n" +
+            $"• المنفذ المحمي: {am.ExecutedQtyKg:N1} كجم (يبقى كما هو)\n" +
+            $"• يُوقَف المتبقي {am.RemainingQtyKg:N1} كجم وينشأ إصدار جديد {am.NewQtyKg:N1} كجم.\n\n" +
+            "سيفحص النظام الطاقة قبل الاعتماد — ويُرفض إن تجاوزت.")) return;
+        DoAmendAction(svc => svc.ApproveAmendment(am.Id), "اعتماد التعديل");
+    }
+
+    private void AmendReject_Click(object sender, RoutedEventArgs e)
+    {
+        if (AmendGrid.SelectedItem is not PlanAmendmentDto am)
+        {
+            AppContainer.Get<DialogService>().Error("اختر طلب تعديل من الشبكة أولاً.");
+            return;
+        }
+        var dlg = new InputDialog("رفض طلب التعديل", "سبب الرفض (إلزامي):") { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+        if ((dlg.Value ?? "").Trim().Length < 5)
+        {
+            AppContainer.Get<DialogService>().Error("سبب الرفض إلزامي.");
+            return;
+        }
+        DoAmendAction(svc => svc.RejectAmendment(am.Id, dlg.Value), "رفض التعديل");
+    }
+
+    private void AmendGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AmendGrid.SelectedItem is PlanAmendmentDto am)
+        {
+            bool pending = am.Status != DocStatuses.Approved && am.Status != DocStatuses.Cancelled;
+            BtnAmendApprove.IsEnabled = pending;
+            BtnAmendReject.IsEnabled = pending;
+        }
+        else { BtnAmendApprove.IsEnabled = false; BtnAmendReject.IsEnabled = false; }
+    }
+
+    private void DoAmendAction(Func<IPlanAmendmentService, OpResult> act, string label)
+    {
+        try
+        {
+            using var scope = AppContainer.NewScope();
+            var svc = scope.ServiceProvider.GetRequiredService<IPlanAmendmentService>();
+            var r = act(svc);
+            if (!r.Ok) { AppContainer.Get<DialogService>().Error(r.Message); return; }
+            AppContainer.Get<DialogService>().Info($"{label}: {r.Message}");
+            Load();
+        }
+        catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, $"PlanDetail.{label}"); }
+    }
+
     private void Load()
     {
         try
@@ -135,6 +202,18 @@ public partial class PlanDetailWindow : Window
                     Detail = DetailAr(plan, a)
                 }).ToList();
 
+            // ── §تعديلات العملاء: سلسلة التعديلات (طلب/اعتماد/رفض + الإصدارات الناتجة) ──
+            try
+            {
+                var amendSvc = scope.ServiceProvider.GetRequiredService<IPlanAmendmentService>();
+                var amends = amendSvc.GetPlanHistory(_planId);
+                AmendGrid.ItemsSource = amends;
+                AmendHint.Text = amends.Count == 0
+                    ? "لا تعديلات على هذه الخطة بعد. التعديل (تغيير صنف العميل أثناء التنفيذ) يُسجَّل كطلب موثّق، وعند الاعتماد يُوقَف المتبقي الأصلي ويُنشأ إصدار جديد — الخطة الأصلية لا تُحذف."
+                    : $"عدد التعديلات المسجلة على هذه الخطة: {amends.Count} — الإصدار الحالي: {plan.RevisionNo}.";
+            }
+            catch { AmendGrid.ItemsSource = null; }
+
             // ── شريط الإجراء: أزرار الدور × الحالة ──
             bool canEdit = session.Can("planning", "Edit");
             bool canApprove = session.Can("planning", "Approve");
@@ -146,6 +225,13 @@ public partial class PlanDetailWindow : Window
             BtnApprove.Visibility = (canApprove && isUnderReview && !plan.IsClosed) ? Visibility.Visible : Visibility.Collapsed;
             BtnReturn.Visibility = (canApprove && isUnderReview && !plan.IsClosed) ? Visibility.Visible : Visibility.Collapsed;
             BtnUnapprove.Visibility = (canCancel && plan.IsApproved && !plan.IsClosed) ? Visibility.Visible : Visibility.Collapsed;
+
+            // §تعديلات العملاء: طلب التعديل للخطة المعتمدة فقط، والاعتماد/الرفض لأصحاب صلاحية الاعتماد
+            BtnAmendRequest.Visibility = (canEdit && plan.IsApproved && !plan.IsClosed) ? Visibility.Visible : Visibility.Collapsed;
+            BtnAmendApprove.Visibility = canApprove ? Visibility.Visible : Visibility.Collapsed;
+            BtnAmendReject.Visibility = canApprove ? Visibility.Visible : Visibility.Collapsed;
+            BtnAmendApprove.IsEnabled = false;
+            BtnAmendReject.IsEnabled = false;
         }
         catch (Exception ex) { AppContainer.Get<DialogService>().HandleException(ex, "PlanDetail.Load"); }
     }

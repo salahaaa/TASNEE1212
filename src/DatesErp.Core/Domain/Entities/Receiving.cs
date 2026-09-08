@@ -36,6 +36,41 @@ public class ShipmentItem : BaseEntity
     /// <summary>§نظام الوحدات: وحدة الاستلام الأصلية كما وصلت فعلياً (كرتون/سلة/كجم...) — لا تُفقد أبداً،
     /// والكمية القياسية للمخزون الخام هي الكيلو (TotalWeightKg).</summary>
     public string ReceiptUnit { get; set; }
+
+    /// <summary>
+    /// §المخازن المتعددة — مخزن الخام الذي يوضع فيه هذا البند بعد الاستلام (خام / ثلاجة / خام 2...).
+    /// القرار على مستوى سطر الصنف: شحنة واحدة قد توزَّع أصنافها على أكثر من مخزن
+    /// (هذا هنا، وهذا هناك) أو كلها في مخزن واحد. فارغ = مخزن السند ثم WRM.
+    /// </summary>
+    public int? DestinationWarehouseId { get; set; }
+
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — هل يشترط هذا البند معالجة قبل دخوله الإنتاج؟
+    /// **مصدر الحقيقة الأساسي** لهذه الكمية المستلمة (قرار نعم/لا على سطر الاستلام)،
+    /// وليس <see cref="Product.RequiresTreatment"/> على بطاقة الصنف:
+    /// نفس الصنف قد يصل في شحنة تحتاج معالجة وأخرى لا. القرار على مستوى سطر الصنف
+    /// لا على مستوى أمر الاستلام كله: سند واحد قد يضم صنفاً يحتاج معالجة وآخر لا.
+    /// <c>null</c> = لم يُسجَّل قرار على السطر (بيانات قديمة سابقة للميزة) — يُحلّ
+    /// صراحةً في ترحيل المخطط أو يرجع افتراضياً لبطاقة الصنف، ولا يُفترض بصمت.
+    /// </summary>
+    public bool? RequiresTreatment { get; set; }
+
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — تاريخ انتهاء المعالجة «حتى تاريخ» الذي يحدده المستخدم.
+    /// إلزامي عندما يكون <see cref="RequiresTreatment"/> = true، ويجب أن يكون ≥ تاريخ الاستلام.
+    /// يُهمَل ويُمسح عندما تكون المعالجة = لا.
+    /// </summary>
+    public DateTime? TreatmentUntil { get; set; }
+
+    /// <summary>
+    /// §الحالة الحالية للمعالجة على مستوى السطر (للاطلاع والتقارير — محسوبة لا مخزّنة):
+    /// بدون معالجة · قيد المعالجة · انتهت المعالجة (جاهز للإجراء التالي).
+    /// </summary>
+    public string TreatmentStatusAr =>
+        RequiresTreatment != true ? "بدون معالجة"
+        : TreatmentUntil == null ? "بحاجة معالجة"
+        : DateTime.Now.Date >= TreatmentUntil.Value.Date ? "انتهت المعالجة — جاهز"
+        : "قيد المعالجة";
 }
 
 /// <summary>§7 — الدفعة (Lot) الناتجة عن اعتماد الاستلام — أساس التتبع الكامل.</summary>
@@ -47,6 +82,12 @@ public class Lot : AuditableEntity
     public int ProductId { get; set; }
     public int? CustomerId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>
+    /// §وحدات الإدخال — وحدة الاستلام الأصلية كما وردت في الشحنة (سلة/كرتون/كجم...)،
+    /// موروثة من <see cref="ShipmentItem.ReceiptUnit"/> حتى يبقى التخطيط والتتبع بنفس
+    /// الوحدة التي استلم بها العميل دون إعادة اشتقاق أو تخمين.
+    /// </summary>
+    public string ReceiptUnit { get; set; }
     public DateTime? LotDate { get; set; }
     public double InitialQtyKg { get; set; }
     public double ProducedQtyKg { get; set; }
@@ -54,6 +95,22 @@ public class Lot : AuditableEntity
     public double DeliveredQtyKg { get; set; }
     public double WastageQtyKg { get; set; }
     public string Status { get; set; } = DocStatuses.Approved;
+
+    /// <summary>
+    /// §المخازن المتعددة — مخزن الخام الذي تسكنه الدفعة: وجهة الاستلام (خام/ثلاجة/خام 2...)
+    /// وهي أيضاً الوجهة التي تعود إليها الكمية عند الإفراج من المعالجة. فارغ = WRM (توافق قديم).
+    /// دورة المعالجة تسحب منه عند البدء وترجع إليه عند الإفراج — لا تُفقَد وجهة الدفعة أبداً.
+    /// </summary>
+    public int? WarehouseId { get; set; }
+
+    /// <summary>
+    /// §المعالجة ضمن أمر الاستلام — قرار المعالجة **الموروث من سطر الاستلام** لهذه الدفعة.
+    /// هذا هو مصدر الحقيقة الذي يعتمد عليه الصرف والإنتاج والتخطيط، لا علم بطاقة الصنف:
+    /// <c>true</c> = كمية تحتاج معالجة (لا تُصرف قبل اكتمالها) · <c>false</c> = جاهزة ·
+    /// <c>null</c> = دفعة قديمة بلا قرار سطر (تُحلّ في ترحيل المخطط أو ترجع لبطاقة الصنف).
+    /// الفصل على مستوى الدفعة يمنع اختلاط كميات معالجة مع غير معالجة لنفس الصنف.
+    /// </summary>
+    public bool? RequiresTreatment { get; set; }
 
     /// <summary>المتاح للتخطيط = المخزون غير المحجوز لخطط نشطة.</summary>
     public double ReservedQtyKg { get; set; }

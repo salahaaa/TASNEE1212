@@ -26,6 +26,8 @@ public class TestHost : IDisposable
             .AddScoped<IAuthService, AuthService>()
             .AddScoped<IReceivingService, ReceivingService>()
             .AddScoped<IPlanningService, PlanningService>()
+            .AddScoped<PlanningService>()
+            .AddScoped<IPlanAmendmentService, PlanAmendmentService>()
                 .AddScoped<IPlanClosureService, PlanClosureService>()
             .AddScoped<IProductionOrderService, ProductionOrderService>()
             .AddScoped<IExecutionService, ExecutionService>()

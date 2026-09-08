@@ -279,13 +279,14 @@ public class CapacityPerShiftTests
     public void Item_Screen_Is_The_Capacity_Source()
     {
         // §البند 2 و11: الطاقة تُدار من شاشة الأصناف
-        // §البند 6: الخطة تعرض الطاقة والمعدل ولا تدخلهما (شاشة الأصناف حُذفت لإعادة التصميم — B69)
+        // §البند 6: شاشة الخطط أصبحت قائمة الخطط المحفوظة + نافذة تفاصيل للاطلاع فقط —
+        // لا تعرض الطاقة ولا تدخلها إطلاقاً (الطاقة تُدار من شاشة الأصناف وحدها).
         string root = FindRoot();
         string plan = File.ReadAllText(Path.Combine(root, "src/DatesErp.Desktop/Views/Screens/PlanningView.xaml"));
-        Assert.Contains("الطاقة القصوى (كرتون)", plan);
-        Assert.Contains("المعدل/ساعة (محسوب)", plan);
-        Assert.Contains("Binding=\"{Binding MaxCapacity}\"", plan);
-        Assert.DoesNotContain("Binding=\"{Binding MaxCapacity, UpdateSourceTrigger", plan);   // للقراءة فقط
+        string detail = File.ReadAllText(Path.Combine(root, "src/DatesErp.Desktop/Views/PlanDetailWindow.xaml"));
+        Assert.DoesNotContain("MaxCapacity", plan);
+        Assert.DoesNotContain("MaxCapacity", detail);
+        Assert.DoesNotContain("UpdateSourceTrigger", plan);
     }
 
     [Fact]

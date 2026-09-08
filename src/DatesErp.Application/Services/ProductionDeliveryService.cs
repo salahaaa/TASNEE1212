@@ -166,6 +166,7 @@ public class ProductionDeliveryService : ServiceBase, IProductionDeliveryService
                     LotId = it.LotId,
                     CustomerId = line.CustomerId,
                     PackagingTypeId = it.PackagingTypeId,
+                    ReceiptUnit = it.ReceiptUnit ?? (it.LotId != null ? Db.Lots.Where(l => l.Id == it.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     PackageCount = it.PackageCount,
                     QtyKg = it.QtyKg
                 });

@@ -101,6 +101,7 @@ public class NumberingService : INumberingService
         "PCL" => _db.PlanClosings.Any(x => x.DocumentNumber == number),
         "LOT" => _db.Lots.Any(x => x.LotCode == number),
         "TASK" => _db.WorkflowTasks.Any(x => x.TaskNumber == number),
+        "AMD" => _db.PlanAmendments.Any(x => x.DocumentNumber == number),
         _ => false
     };
 }

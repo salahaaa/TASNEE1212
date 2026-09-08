@@ -83,7 +83,7 @@ public static class ScreenFactory
     private static UIElement PlanningScreen()
     {
         var v = new PlanningView();
-        var c = new ErpChrome { TitleText = "[MAIN] - [نظام إدارة وتصنيع التمور - التخطيط والجدولة - إعداد واعتماد خطط الإنتاج (MPS)] - (" + Company + ")" };
+        var c = new ErpChrome { TitleText = "[MAIN] - [نظام إدارة وتصنيع التمور - الخطط المحفوظة - عرض واطلاع (MPS)] - (" + Company + ")" };
         v.AttachChrome(c);
         return c;
     }

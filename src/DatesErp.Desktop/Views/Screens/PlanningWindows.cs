@@ -19,6 +19,8 @@ public class LotEditorRow : INotifyPropertyChanged
     public string CustomerName { get; set; }
     public string RawName { get; set; }
     public double Available { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تُعرض كمرجع لوحدة الإدخال عند التخطيط.</summary>
+    public string ReceiptUnit { get; set; } = "";
     /// <summary>عدد أيام الشحنة في المخازن (الأقدم أولوية الإنتاج).</summary>
     public string DaysInStockText { get; set; } = "";
     /// <summary>تاريخ مجدول مسبقاً (من محرك التوزيع العادل) — يُقدَّم على تاريخ الشاشة.</summary>
@@ -51,10 +53,12 @@ public class LotEditorRow : INotifyPropertyChanged
     /// <summary>§B80: وحدة كل صنف تام كما في بطاقته (شاشة الأصناف) — لعرضها عند اختيار الصنف.</summary>
     public Dictionary<int, string> ProductUnits { get; set; } = new();
 
-    /// <summary>§B80: وحدة الصنف المختار — كما عُرّفت في بطاقة الصنف (مثل «كرتون 5كجم»).</summary>
+    /// <summary>§B80: وحدة الصنف المختار — كما عُرّفت في بطاقة الصنف (مثل «كرتون 5كجم»).
+    /// §وحدة الإدخال: إن لم يُختر صنف بعد تعرض وحدة استلام الشحنة (سلة/كرتون/كجم) كمرجع.</summary>
     public string UnitDisplay
         => _productId != null && ProductUnits.TryGetValue(_productId.Value, out var u) && !string.IsNullOrWhiteSpace(u)
-            ? u : "—";
+            ? u
+            : (!string.IsNullOrWhiteSpace(ReceiptUnit) ? ReceiptUnit : "—");
 
     /// <summary>§المتاح لكل صنف تام من هذه الدفعة (يخصم حجوزات ذلك الصنف فقط — لا تداخل).</summary>
     public Dictionary<int, double> PerProductAvailable { get; set; } = new();
@@ -336,6 +340,7 @@ public class LotsEditorWindow : Window
 
         _grid.Columns.Add(new DataGridTextColumn { Header = "المتاح (كجم)", Width = 150, IsReadOnly = true, Binding = new System.Windows.Data.Binding("AvailableDisplay") });
         _grid.Columns.Add(new DataGridTextColumn { Header = "أيام بالمخزن ⏳", Width = 95, IsReadOnly = true, Binding = new System.Windows.Data.Binding("DaysInStockText") });
+        _grid.Columns.Add(new DataGridTextColumn { Header = "وحدة الاستلام 📦", Width = 95, IsReadOnly = true, Binding = new System.Windows.Data.Binding("ReceiptUnit") });
 
         var prodCol = new DataGridTemplateColumn { Header = "الصنف التام (002) *", Width = 200 };
         var prodCombo = new FrameworkElementFactory(typeof(ComboBox));

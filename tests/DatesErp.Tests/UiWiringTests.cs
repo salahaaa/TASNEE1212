@@ -239,7 +239,7 @@ public class UiWiringTests
         var mains = new (string file, string grid)[]
         {
             ("OrdersView", "OrdersGrid"),
-            ("PlanningView", "RowsGrid"), ("ReceivingView", "ShipGrid"),
+            ("PlanningView", "PlansGrid"), ("ReceivingView", "ShipGrid"),
             ("DeliveryView", "DeliveriesGrid"), ("FinishedGoodsView", "ReceiptsGrid"),
             ("QualityView", "ResultsGrid"),
             ("ReportsView", "ReportGrid"),

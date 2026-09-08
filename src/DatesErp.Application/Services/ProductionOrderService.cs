@@ -102,6 +102,7 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
                     PlanItemId = dto.PlanItemId,
                     LotId = dto.LotId,
                     ShipmentId = dto.ShipmentId ?? (dto.LotId != null ? Db.Lots.Where(l => l.Id == dto.LotId).Select(l => l.ShipmentId).FirstOrDefault() : null),
+                    ReceiptUnit = dto.ReceiptUnit ?? (dto.LotId != null ? Db.Lots.Where(l => l.Id == dto.LotId).Select(l => l.ReceiptUnit).FirstOrDefault() : null),
                     CustomerId = dto.CustomerId ?? order.CustomerId,
                     ProductId = dto.ProductId,
                     PackagingTypeId = dto.PackagingTypeId,
@@ -359,6 +360,7 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
                     : "-",
                 LotId = pi.LotId,
                 LotCode = lot?.LotCode ?? "-",
+                ReceiptUnit = pi.ReceiptUnit ?? lot?.ReceiptUnit,
                 RawName = lot != null
                     ? Db.Products.AsNoTracking().Where(p => p.Id == lot.ProductId).Select(p => p.ProductNameAr).FirstOrDefault()
                     : "-",
@@ -451,6 +453,7 @@ public class ProductionOrderService : ServiceBase, IProductionOrderService
             {
                 PlanItemId = x.o.PlanItemId,
                 LotId = x.o.LotId,
+                ReceiptUnit = x.o.ReceiptUnit,
                 CustomerId = x.o.CustomerId,
                 ProductId = x.o.ProductId,
                 PackagingTypeId = x.o.PackagingTypeId,

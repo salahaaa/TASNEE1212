@@ -26,6 +26,8 @@ public class FinishedGoodsReceiptItem : BaseEntity
     public int ProductId { get; set; }
     public int? LotId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تسافر مع البند من التخطيط حتى استلام التام.</summary>
+    public string ReceiptUnit { get; set; }
     public int PackageCount { get; set; }
     public double NetWeightKg { get; set; }
     public double ReceivedQtyKg { get; set; } // ما استلمه أمين المخزن فعلياً
@@ -59,6 +61,8 @@ public class CustomerDeliveryItem : BaseEntity
     public int ProductId { get; set; }
     public int? LotId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تصل مع البند حتى تسليم العميل.</summary>
+    public string ReceiptUnit { get; set; }
     public int PackageCount { get; set; }
     public double QtyKg { get; set; }
     /// <summary>§القاعدة 7: وزن الكرتون وقت التسليم — يجمّد التعريف اللاحق للعبوة بأثر رجعي.</summary>
@@ -112,6 +116,8 @@ public class ProductionDeliveryItem : BaseEntity
     /// <summary>عميل البند — جوهر تعدد العملاء: التام يُقيَّد به لا بعميل الترويسة.</summary>
     public int? CustomerId { get; set; }
     public int? PackagingTypeId { get; set; }
+    /// <summary>§وحدة استلام الشحنة (سلة/كرتون/كجم) — تصل مع البند حتى أمر تسليم الإنتاج.</summary>
+    public string ReceiptUnit { get; set; }
     public int PackageCount { get; set; }
     public double QtyKg { get; set; }
     public double ReceivedQtyKg { get; set; }

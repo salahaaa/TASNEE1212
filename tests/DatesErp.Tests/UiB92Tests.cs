@@ -40,11 +40,10 @@ public class UiB92Tests
     }
 
     [Fact]
-    public void Manual_Add_Has_Shift_And_Period_Date_Check()
+    public void Manual_Add_Removed_From_Planning_List_View()
     {
+        // §شاشة الخطط أصبحت عرضاً واطلاعاً فقط — لا نموذج إضافة يدوي داخل الشاشة.
         string cs = Read("src/DatesErp.Desktop/Views/Screens/PlanningView.xaml.cs");
-        Assert.Contains("الوردية *", cs);
-        Assert.Contains("اختر وردية الإنتاج للبند", cs);
-        Assert.Contains("داخل فترة الخطة", cs);
+        Assert.DoesNotContain("Manual_Click", cs);
     }
 }

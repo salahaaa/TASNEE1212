@@ -41,6 +41,12 @@ public class ReceivingPrintModel
         public int PackageCount { get; set; }
         public double UnitWeightKg { get; set; }
         public double QtyKg { get; set; }
+        /// <summary>§المعالجة ضمن أمر الاستلام: نعم / لا.</summary>
+        public string Treatment { get; set; } = "لا";
+        /// <summary>§تاريخ انتهاء المعالجة (فارغ = لا معالجة).</summary>
+        public string TreatmentUntil { get; set; } = "-";
+        /// <summary>§المخازن المتعددة — اسم مخزن الخام الوجهة لهذا البند (خام/ثلاجة/خام 2...).</summary>
+        public string WarehouseName { get; set; } = "-";
     }
 
     public List<ItemRow> Items { get; set; } = new();
@@ -92,7 +98,13 @@ public class ReceivingPrintModel
                     : "-",
                 PackageCount = it.PackageCount,
                 UnitWeightKg = it.UnitWeightKg,
-                QtyKg = it.TotalWeightKg
+                QtyKg = it.TotalWeightKg,
+                Treatment = it.RequiresTreatment == true ? "نعم" : "لا",
+                TreatmentUntil = it.TreatmentUntil?.ToString("dd/MM/yyyy") ?? "-",
+                WarehouseName = it.DestinationWarehouseId != null
+                    ? db.Warehouses.Where(w => w.Id == it.DestinationWarehouseId).Select(w => w.WarehouseNameAr).FirstOrDefault() ?? "-"
+                    : (db.Warehouses.Where(w => w.Id == (ship.ReceivingWarehouseId ?? 0)).Select(w => w.WarehouseNameAr).FirstOrDefault()
+                       ?? db.Warehouses.Where(w => w.WarehouseCode == "WRM").Select(w => w.WarehouseNameAr).FirstOrDefault() ?? "-")
             });
         }
         return model;
@@ -271,10 +283,10 @@ public static class ReceivingPrintDocument
     // ── جدول البنود ──
     private static Block BuildItemsTable(ReceivingPrintModel m)
     {
-        var t = NewTable(7, new[] { 30, 90, Double.NaN /*اسم الصنف يأخذ الباقي*/, 92, 62, 84, 96 });
+        var t = NewTable(10, new[] { 30, 74, Double.NaN /*اسم الصنف يأخذ الباقي*/, 80, 55, 74, 82, 84, 64, 74 });
         // رأس الجدول
         var head = new TableRow { Background = Brushes.DarkBlue };
-        foreach (var h in new[] { "م", "رقم الصنف", "اسم الصنف الخام", "وحدة الاستلام", "العدد", "وزن العبوة", "الإجمالي (كجم)" })
+        foreach (var h in new[] { "م", "رقم الصنف", "اسم الصنف الخام", "وحدة الاستلام", "العدد", "وزن العبوة", "الإجمالي (كجم)", "المخزن", "المعالجة", "حتى تاريخ" })
             head.Cells.Add(HeadCell(h));
         t.RowGroups[0].Rows.Add(head);
 
@@ -289,6 +301,9 @@ public static class ReceivingPrintDocument
             r.Cells.Add(CenterCell(it.PackageCount.ToString()));
             r.Cells.Add(CenterCell(UiFormat.N(it.UnitWeightKg)));
             r.Cells.Add(CenterCell(UiFormat.N(it.QtyKg)));
+            r.Cells.Add(CenterCell(it.WarehouseName));
+            r.Cells.Add(CenterCell(it.Treatment));
+            r.Cells.Add(CenterCell(it.TreatmentUntil));
             t.RowGroups[0].Rows.Add(r);
         }
 
@@ -301,6 +316,9 @@ public static class ReceivingPrintDocument
         total.Cells.Add(CenterCell(m.Items.Sum(i => i.PackageCount).ToString()));
         total.Cells.Add(new TableCell(new Paragraph(new Run(""))));
         total.Cells.Add(CenterCell(UiFormat.N(m.Items.Sum(i => i.QtyKg))));
+        total.Cells.Add(new TableCell(new Paragraph(new Run(""))));
+        total.Cells.Add(new TableCell(new Paragraph(new Run(""))));
+        total.Cells.Add(new TableCell(new Paragraph(new Run(""))));
         t.RowGroups[0].Rows.Add(total);
 
         return new Section { Margin = new Thickness(0, 8, 0, 0), Blocks = { t } };

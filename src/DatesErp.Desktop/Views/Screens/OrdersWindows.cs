@@ -363,6 +363,7 @@ public class NewOrderPanel : UserControl
                         {
                             PlanItemId = r.Src.PlanItemId,
                             LotId = r.Src.LotId,
+                            ReceiptUnit = r.Src.ReceiptUnit,
                             CustomerId = r.Src.CustomerId,
                             ProductId = r.Src.ProductId,
                             PackagingTypeId = r.Src.PackagingTypeId,
@@ -400,6 +401,7 @@ public class NewOrderPanel : UserControl
                             {
                                 PlanItemId = x.row.Src.PlanItemId,
                                 LotId = x.row.Src.LotId,
+                                ReceiptUnit = x.row.Src.ReceiptUnit,
                                 CustomerId = x.row.Src.CustomerId,
                                 ProductId = x.row.Src.ProductId,
                                 PackagingTypeId = x.row.Src.PackagingTypeId,

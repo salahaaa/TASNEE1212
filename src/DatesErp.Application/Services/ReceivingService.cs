@@ -47,6 +47,7 @@ public class ReceivingService : ServiceBase, IReceivingService
             if (warehouseId != null && Db.Warehouses.Any(w => w.Id == warehouseId && w.IsActive))
                 ship.ReceivingWarehouseId = warehouseId;
             ship.Status = DocStatuses.Draft;
+            var recvDate = ship.ReceivedDate ?? DateTime.Now;
             foreach (var it in items)
             {
                 // §تتبع الصنف: كل بند استلام يجب أن يسجل صنفاً صريحاً — لا استلام باسم عام («تمور» فئة وليست صنفاً)
@@ -62,6 +63,35 @@ public class ReceivingService : ServiceBase, IReceivingService
 
                 var qty = it.QtyKg > 0 ? it.QtyKg : it.PackageCount * it.UnitWeightKg;
                 if (qty <= 0) throw new DomainException("كمية غير صالحة في أحد البنود.");
+
+                // §المعالجة ضمن أمر الاستلام — قرار السطر (نعم/لا) وتاريخ انتهاء المعالجة.
+                // «نعم» ⟵ حتى تاريخ إلزامي و≥ تاريخ الاستلام. «لا»/غير محدد (توافق قديم)
+                // ⟵ لا معالجة ويُمسح أي تاريخ معلّق، ويُحفظ القرار كما ورد (null يبقى null
+                // كي لا يُفترض «لا» بصمت على بيانات قديمة).
+                bool treat = it.RequiresTreatment == true;
+                DateTime? until = null;
+                if (treat)
+                {
+                    if (!UiFormat.TryParseDate(it.TreatmentUntil, out var tu))
+                        throw new DomainException(
+                            $"البند «{prod.ProductNameAr}» يتطلب معالجة (نعم) — أدخل تاريخ انتهاء المعالجة «حتى تاريخ» بصيغة يوم/شهر/سنة.");
+                    until = tu.Date;
+                    if (until.Value.Date < recvDate.Date)
+                        throw new DomainException(
+                            $"تاريخ انتهاء المعالجة للبند «{prod.ProductNameAr}» ({tu:dd/MM/yyyy}) " +
+                            $"يجب أن يكون أكبر من أو يساوي تاريخ الاستلام ({recvDate:dd/MM/yyyy}).");
+                }
+
+                // §المخازن المتعددة — مخزن الخام الوجهة لهذا البند (خام/ثلاجة/خام 2...).
+                // فارغ = مخزن السند. يُرفض أي معرّف لمخزن غير نشط أو غير خام.
+                int? destWh = it.WarehouseId;
+                if (destWh != null)
+                {
+                    var wh = Db.Warehouses.FirstOrDefault(w => w.Id == destWh && w.IsActive && w.WarehouseType == "Raw")
+                        ?? throw new DomainException(
+                            $"مخزن الوجهة للبند «{prod.ProductNameAr}» غير موجود أو غير نشط أو ليس مخزن خام.");
+                }
+
                 ship.Items.Add(new ShipmentItem
                 {
                     ProductId = it.ProductId,
@@ -69,6 +99,9 @@ public class ReceivingService : ServiceBase, IReceivingService
                     PackageCount = it.PackageCount,
                     UnitWeightKg = it.UnitWeightKg,
                     TotalWeightKg = qty,
+                    RequiresTreatment = it.RequiresTreatment, // null يبقى null (توافق قديم) لا «لا» بصمت
+                    TreatmentUntil = until,
+                    DestinationWarehouseId = destWh,
                     // §قاعدة الاستلام: الخام قد يصل بأي عبوة — سلة/كيس/كرتون/غيرها.
                     // فتُسجَّل وحدة الاستلام الأصلية كما وردت، ولا تُفرض في الكود،
                     // والكيلو يبقى الوزن المرجعي في TotalWeightKg. ومجموعة الصنف (001) هي
@@ -138,10 +171,13 @@ public class ReceivingService : ServiceBase, IReceivingService
 
         return RunOp(() =>
         {
-            // §المخازن المتعددة: مخزن الاستلام المختار في السند — أو الافتراضي WRM للسندات القديمة
-            var whRaw = ship.ReceivingWarehouseId ?? WarehouseId("WRM");
             foreach (var item in receivedItems)
             {
+                // §المخازن المتعددة — مخزن الخام الوجهة لهذا البند (خام/ثلاجة/خام 2...).
+                // قرار السطر يعلو على مخزن السند، ثم WRM للسندات القديمة بلا مخزن.
+                var whRaw = item.DestinationWarehouseId
+                    ?? ship.ReceivingWarehouseId
+                    ?? WarehouseId("WRM");
                 var lot = new Lot
                 {
                     LotCode = Numbering.Next("LOT"),
@@ -150,9 +186,16 @@ public class ReceivingService : ServiceBase, IReceivingService
                     ProductId = item.ProductId,
                     CustomerId = ship.CustomerId,
                     PackagingTypeId = item.PackagingTypeId,
+                    // §وحدات الإدخال — تُنقل وحدة الاستلام الأصلية (سلة/كرتون/كجم) للدفعة
+                    // حتى يبقى التخطيط والتتبع بنفس وحدة الاستلام دون فقدها.
+                    ReceiptUnit = item.ReceiptUnit,
                     LotDate = ship.ReceivedDate ?? DateTime.Now,
                     InitialQtyKg = item.TotalWeightKg,
                     InStockQtyKg = item.TotalWeightKg,
+                    WarehouseId = whRaw, // §وجهة الدفعة — تعود إليها الكمية عند الإفراج من المعالجة
+                    // §المعالجة ضمن أمر الاستلام — قرار السطر هو مصدر الحقيقة الموروث للدفعة:
+                    // true = تحتاج معالجة · false = جاهزة · null = قديمة بلا قرار (تُحلّ في الترحيل).
+                    RequiresTreatment = item.RequiresTreatment,
                     Status = DocStatuses.Approved
                 };
                 Db.Lots.Add(lot);
@@ -163,6 +206,52 @@ public class ReceivingService : ServiceBase, IReceivingService
                     packagingTypeId: item.PackagingTypeId,
                     notes: $"استلام شحنة {ship.DocumentNumber}");
                 item.Status = DocStatuses.Approved;
+
+                // §المعالجة ضمن أمر الاستلام — بند «المعالجة = نعم» يدخل مخزن المعالجة فور الاعتماد:
+                // تُنشأ عملية معالجة تلقائية (مصدر الحقيقة للحالة) ويُحوَّل الرصيد من مخزن الدفعة إلى WTRT
+                // ويُعلَّم رصيد الدفعة «تحت المعالجة» فلا يُتاح للتخطيط/الإنتاج قبل انتهاء المدة.
+                // الإفراج بعد انتهاء المدة يبقى في دورة المعالجة المعتمدة (شاشة «معالجة وتعقيم الخام»).
+                if (item.RequiresTreatment == true && item.TreatmentUntil != null)
+                {
+                    // إبقاء قيد الاستلام الوارد ظاهراً في المخزن قبل التحويل حتى يجده قيد التحويل
+                    Db.SaveChanges();
+                    var startedAt = ship.ReceivedDate ?? DateTime.Now;
+                    var until = item.TreatmentUntil.Value.Date;
+                    var trt = new RawTreatment
+                    {
+                        TreatmentNo = Numbering.Next("TRT"),
+                        LotId = lot.Id,
+                        ProductId = item.ProductId,          // §لا صنف جديد: يُنسخ من الدفعة كما هو
+                        QtyKg = item.TotalWeightKg,
+                        PackageCount = item.PackageCount,
+                        StartedAt = startedAt,
+                        DurationHours = Math.Max(0, (until.AddDays(1) - startedAt).TotalHours),
+                        ExpectedReadyAt = until.AddDays(1).AddTicks(-1), // نهاية يوم «حتى تاريخ»
+                        ResponsibleUserId = ship.ReceivedBy ?? Session?.UserId,
+                        Notes = $"معالجة تلقائية من سند الاستلام {ship.DocumentNumber} — حتى تاريخ {until:dd/MM/yyyy}",
+                        Status = TreatmentStatuses.InProgress
+                    };
+                    Db.RawTreatments.Add(trt);
+                    Db.SaveChanges(); // للحصول على معرف العملية قبل قيد الحركة
+
+                    PostStockMovement(WarehouseId("WTRT"), MovementType.Inbound, item.TotalWeightKg, item.PackageCount,
+                        ReferenceDocType.TreatmentStart, trt.TreatmentNo,
+                        productId: item.ProductId, lotId: lot.Id, customerId: ship.CustomerId,
+                        packagingTypeId: item.PackagingTypeId,
+                        notes: $"بدء معالجة {trt.TreatmentNo} — من سند الاستلام {ship.DocumentNumber}");
+                    PostStockMovement(whRaw, MovementType.Outbound, item.TotalWeightKg, item.PackageCount,
+                        ReferenceDocType.TreatmentStart, trt.TreatmentNo,
+                        productId: item.ProductId, lotId: lot.Id, customerId: ship.CustomerId,
+                        packagingTypeId: item.PackagingTypeId,
+                        notes: $"بدء معالجة {trt.TreatmentNo} — من سند الاستلام {ship.DocumentNumber}");
+
+                    lot.UnderTreatmentQtyKg = item.TotalWeightKg;
+                }
+                // «لا» أو null ← لا معالجة تلقائية: يبقى UnderTreatmentQtyKg = 0 فالكمية
+                // متاحة فوراً للتخطيط/الإنتاج (AvailableQtyKg = InStock − Reserved − 0).
+                // TreatmentReadyQtyKg لا يُلمَس هنا: يُراكم فقط عند الإفراج من المعالجة
+                // (RawTreatmentService.Release) وللدفعات القائمة عبر BackfillTreatmentReadiness —
+                // ولو مُلئ عند الاستلام لخرق حارس «لم تكتمل معالجتها» على الأصناف التي تشترط معالجة.
             }
             ship.IsApproved = true;
             ship.Status = DocStatuses.Approved;
@@ -191,16 +280,25 @@ public class ReceivingService : ServiceBase, IReceivingService
             {
                 if (lot.ProducedQtyKg > 0 || lot.DeliveredQtyKg > 0)
                     throw new DomainException($"لا يمكن إلغاء الاستلام: الدفعة {lot.LotCode} استُهلك منها بالفعل.");
-                // §تعكس الأرصدة من المخزن نفسه الذي قُيّدت فيه عند الاعتماد
-                var whRaw = ship.ReceivingWarehouseId ?? WarehouseId("WRM");
-                var balance = Db.StockBalances.FirstOrDefault(b => b.WarehouseId == whRaw && b.LotId == lot.Id);
-                if (balance != null)
+
+                // §المعالجة ضمن أمر الاستلام — إلغاء الاعتماد يعكس أيضاً دورة المعالجة التلقائية:
+                // عمليات المعالجة + حركاتها (TreatmentStart/Release) + رصيد مستودع المعالجة.
+                var treatments = Db.RawTreatments.Where(t => t.LotId == lot.Id).ToList();
+                foreach (var trt in treatments)
                 {
-                    balance.QtyKg -= lot.InitialQtyKg;
-                    if (balance.QtyKg < -0.001) throw new DomainException("لا يمكن الإلغاء: الرصيد الحالي لا يغطي كمية الدفعة.");
+                    Db.InventoryTransactions.RemoveRange(Db.InventoryTransactions.Where(t =>
+                        t.LotId == lot.Id &&
+                        (t.ReferenceDocType == ReferenceDocType.TreatmentStart || t.ReferenceDocType == ReferenceDocType.TreatmentRelease) &&
+                        t.ReferenceDocNumber.StartsWith(trt.TreatmentNo)));
                 }
+                Db.RawTreatments.RemoveRange(treatments);
+
+                // §تعكس حركة استلام الشحنة نفسها
                 Db.InventoryTransactions.RemoveRange(Db.InventoryTransactions.Where(t =>
                     t.ReferenceDocType == ReferenceDocType.ShipmentReceipt && t.ReferenceDocNumber == ship.DocumentNumber && t.LotId == lot.Id));
+
+                // §إزالة أرصدة الدفعة من كل المخازن (خام/معالجة) — لا بقايا صفرية تُبقي قيوداً وهمية
+                Db.StockBalances.RemoveRange(Db.StockBalances.Where(b => b.LotId == lot.Id));
                 Db.Lots.Remove(lot);
             }
             ship.IsApproved = false;
@@ -242,6 +340,9 @@ public class ReceivingService : ServiceBase, IReceivingService
                     UnitWeightKg = it.UnitWeightKg,
                     TotalWeightKg = it.TotalWeightKg,
                     ReceiptUnit = it.ReceiptUnit,
+                    RequiresTreatment = it.RequiresTreatment,
+                    TreatmentUntil = it.TreatmentUntil,
+                    DestinationWarehouseId = it.DestinationWarehouseId, // §يبقى البند المعلّق على وجهته (خام/ثلاجة...)
                     Status = "Received"
                 });
             }
