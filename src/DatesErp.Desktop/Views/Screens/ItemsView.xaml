@@ -27,6 +27,16 @@
                         <TextBlock Text="الوحدة * (تُقرأ من الوحدات):" Style="{StaticResource FieldLabel}"/>
                         <ComboBox x:Name="UnitBox" Width="140"/>
                     </StackPanel>
+                    <!-- §B109 — علم «يحتاج معالجة»: هذا هو المكان الوحيد الذي يضبطه.
+                         شاشة الاستلام تقرأه ولا تحرره، فبدون هذا الصندوق كان العمود
+                         هناك يعرض «لا» دائماً بلا أي طريقة لجعله «نعم». -->
+                    <StackPanel Margin="0,0,14,0" VerticalAlignment="Bottom">
+                        <TextBlock Text="المعالجة والتعقيم:" Style="{StaticResource FieldLabel}"/>
+                        <CheckBox x:Name="TreatBox" Content="🧪 يحتاج معالجة قبل الإنتاج"
+                                  VerticalAlignment="Center" Margin="0,6,0,0" FontSize="12" FontWeight="Bold"
+                                  Foreground="#B45309"
+                                  ToolTip="عند تفعيله: يظهر الصنف في شاشة الاستلام بعمود «يحتاج معالجة = نعم» ويُسمح بتوجيهه إلى مستودع المعالجة وتقسيم درجات الإصابة."/>
+                    </StackPanel>
                 </WrapPanel>
                 <!-- إضافيات مجموعة التام فقط -->
                 <WrapPanel x:Name="FinishedFields" Margin="0,8,0,0" Visibility="Collapsed">
@@ -73,6 +83,7 @@
                 <DataGridTextColumn Header="اسم الصنف" Binding="{Binding Name}" Width="*" IsReadOnly="True"/>
                 <DataGridTextColumn Header="المجموعة" Binding="{Binding Group}" Width="90" IsReadOnly="True"/>
                 <DataGridTextColumn Header="الوحدة" Binding="{Binding Unit}" Width="80" IsReadOnly="True"/>
+                <DataGridTextColumn Header="يحتاج معالجة" Binding="{Binding Treat}" Width="100" IsReadOnly="True"/>
                 <DataGridTextColumn Header="وزن الكرتون" Binding="{Binding CartonW}" Width="90" IsReadOnly="True"/>
                 <DataGridTextColumn Header="الصنف الخام" Binding="{Binding Source}" Width="*" IsReadOnly="True"/>
                 <DataGridTextColumn Header="الحالة" Binding="{Binding Status}" Width="90" IsReadOnly="True"/>

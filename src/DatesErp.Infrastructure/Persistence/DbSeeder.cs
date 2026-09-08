@@ -268,7 +268,7 @@ public static class DbSeeder
     }
 
     /// <summary>هدف ترقية البيانات المرجعية الحالي — يُخزَّن في SystemSettings لمنع التكرار.</summary>
-    public const string RefDataUpgradeTarget = "B104";   // §B104: هدف جديد ليعاد تنفيذ الترقية على القواعد القائمة
+    public const string RefDataUpgradeTarget = "B109";   // §B109: هدف جديد ليعاد تنفيذ الترقية على القواعد القائمة (استكمال الوحدات)
 
     /// <summary>
     /// §ترقية البيانات المرجعية على القواعد القائمة — تُشغَّل عند الإقلاع بعد ترحيل المخطط.
@@ -376,6 +376,38 @@ public static class DbSeeder
             {
                 db.NumberingSchemes.Add(new NumberingScheme { SchemeCode = sch.Item1, SchemeName = sch.Item2, Prefix = sch.Item3, LastSequence = 0 });
                 changes.Add($"أُضيف ترقيم المستندات الناقص: {sch.Item1} ({sch.Item3}).");
+            }
+        }
+
+        // ── §B109 — استكمال وحدات القياس في القواعد القائمة ──
+        // الوحدات تُزرع في Seed() وحدها، وهي محروسة بعلامة "Seeded": أي قاعدة أُنشئت
+        // قبل إضافة «سلة»/«كرتون» لم تستلمها أبداً، فتظهر قائمة الوحدات في بطاقة الصنف
+        // ناقصة — ومن ثَمّ يظهر عمود «الوحدة» في شاشة الخطط فارغاً أو «—»، لأنه يقرأ
+        // Product.UnitOfMeasure الذي لم يُضبط أصلاً. الاستكمال هنا idempotent بالاسم.
+        foreach (var u in new[]
+        {
+            ("KG", "كجم"), ("CTN", "كرتون"), ("PCS", "حبة"), ("PC", "قطعة"),
+            ("ROLL", "لفة"), ("RUL", "رول"), ("LTR", "لتر"), ("BSK", "سلة"),
+        })
+        {
+            if (!db.UnitsOfMeasure.Any(x => x.UnitNameAr == u.Item2))
+            {
+                db.UnitsOfMeasure.Add(new UnitOfMeasure { UnitCode = u.Item1, UnitNameAr = u.Item2 });
+                changes.Add($"أُضيفت وحدة القياس الناقصة: {u.Item2}.");
+            }
+        }
+
+        // ── §B109 — استكمال العبوات القياسية (كرتون/سلة) في القواعد القائمة ──
+        foreach (var pk in new[]
+        {
+            ("CT5", "كرتون 5 كجم", 5.0), ("CT10", "كرتون 10 كجم", 10.0), ("BK20", "سلة 20 كجم", 20.0),
+        })
+        {
+            if (!db.PackagingTypes.Any(x => x.PackageCode == pk.Item1))
+            {
+                db.PackagingTypes.Add(new PackagingType
+                { PackageCode = pk.Item1, PackageNameAr = pk.Item2, UnitWeightKg = pk.Item3, UnitsPerPackage = 1 });
+                changes.Add($"أُضيفت العبوة الناقصة: {pk.Item2}.");
             }
         }
 

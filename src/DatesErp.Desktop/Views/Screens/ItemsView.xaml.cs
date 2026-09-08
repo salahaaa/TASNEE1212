@@ -122,6 +122,7 @@ public partial class ItemsView : UserControl
                 Name = p.ProductNameAr,
                 Group = p.GroupCode,
                 Unit = p.UnitOfMeasure,
+                Treat = p.RequiresTreatment ? "نعم 🧪" : "لا",
                 CartonW = p.CartonWeightKg > 0 ? p.CartonWeightKg.ToString("0.###") : "—",
                 Source = p.SourceProductId != null && nameById.TryGetValue(p.SourceProductId.Value, out var srcName)
                     ? srcName ?? "—"
@@ -144,6 +145,7 @@ public partial class ItemsView : UserControl
         CartonWBox.Text = "";
         YieldBox.Text = "";
         UnitBox.SelectedIndex = -1;
+        TreatBox.IsChecked = false;
         if (SourceBox.Items.Count > 0) SourceBox.SelectedIndex = 0;
         var g = GroupBox.SelectedItem as GroupOpt;
         if (g != null) CodeBox.Text = NextCode(g.Code);
@@ -178,7 +180,8 @@ public partial class ItemsView : UserControl
             if (string.IsNullOrWhiteSpace(CodeBox.Text)) CodeBox.Text = NextCode(g.Code);
 
             var r = Svc().SaveProductFull(_editId > 0 ? _editId : null, CodeBox.Text.Trim(), NameBox.Text.Trim(),
-                g.Code, finished ? "Finished" : "Raw", UnitBox.Text as string, cw, molds, mw, null, srcId, null, yf);
+                g.Code, finished ? "Finished" : "Raw", UnitBox.Text as string, cw, molds, mw, null, srcId, null, yf,
+                requiresTreatment: TreatBox.IsChecked == true);
             if (!r.Ok) { AppContainer.Get<DialogService>().Error(r.Message); return; }
             AppContainer.Get<DialogService>().Info(r.Message);
             Refresh(SearchBox.Text);
@@ -203,6 +206,7 @@ public partial class ItemsView : UserControl
         CodeBox.Text = p.ProductCode;
         NameBox.Text = p.ProductNameAr;
         UnitBox.SelectedItem = p.UnitOfMeasure;
+        TreatBox.IsChecked = p.RequiresTreatment;
         if (p.GroupCode == "002")
         {
             MoldsBox.Text = p.MoldsCount.ToString();

@@ -219,7 +219,7 @@ public partial class MasterDataService
     public OpResult SaveProductFull(int? id, string code, string name, string groupCode, string itemType,
         string unit, double cartonWeight, int moldsCount, double moldWeight,
         List<(int shiftId, int? packagingTypeId, int maxCartons)> capacities, int? sourceProductId = null,
-        int? sourcePackagingTypeId = null, double? yieldFactor = null)
+        int? sourcePackagingTypeId = null, double? yieldFactor = null, bool? requiresTreatment = null)
     {
         Require("products", id == null ? "Create" : "Edit");
         if (string.IsNullOrWhiteSpace(name)) return OpResult.Fail("أدخل اسم الصنف.");
@@ -259,6 +259,10 @@ public partial class MasterDataService
             p.MoldsCount = moldsCount;
             p.MoldWeightKg = moldWeight;
             if (yieldFactor != null) p.YieldFactor = yieldFactor; // §B85/H3: يُحفظ عند تمريره فقط — الفراغ يُبقي القديم
+            // §B109: علم «يحتاج معالجة» يُحفظ من بطاقة الصنف. اختياري (null = لا تغيير)
+            // كي لا تُصفّر النداءاتُ القديمة علماً مضبوطاً؛ فالحقل كان معرَّفاً في الكيان
+            // منذ B107 بلا أي عنصر واجهة يضبطه — فبقي false أبداً في شاشة الاستلام.
+            if (requiresTreatment != null) p.RequiresTreatment = requiresTreatment.Value;
             // §إصلاح: كان الحفظ يعيد التفعيل دائماً، فلا سبيل لإيقاف صنف من بطاقته
             if (id == null) p.IsActive = true;
             // §تتبع الصنف: التعريف الرسمي للتحويل — الخام الذي يُنتج منه هذا المنتج
